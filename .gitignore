@@ -1,0 +1,46 @@
+# Dependencies
+node_modules/
+package-lock.json
+bun.lock
+
+# Build outputs
+dist/
+*.log
+npm-debug.log*
+
+# Native platforms (regenerated per-machine via npx cap add)
+/android/
+/ios/
+
+# Environment & secrets
+
+
+.env
+.env.local
+.env.production
+.env.development
+*.keystore
+*.jks
+local.properties
+
+# Editor & OS
+.idea/
+.vscode/
+*.iml
+*.swp
+.DS_Store
+Thumbs.db
+.lovable/
+
+# Build artifacts
+*.apk
+*.ipa
+*.aab
+
+# Supabase CLI cache
+supabase/.temp/
+
+# Smart contract artifacts
+contracts/cache/
+contracts/artifacts/
+contracts/typechain-types/

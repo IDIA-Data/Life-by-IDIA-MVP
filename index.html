@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+    <title>IDIA Life | Sovereign Vault</title>
+
+    <script>
+      console.log(`\n========== [START] index.html: DOM Boot Sequence ==========`);
+      try {
+        console.log(`[INFO] [index.html] Native DOM parsed successfully.`);
+        console.log(`[INFO] [index.html] Awaiting Vite module bundler injection...`);
+      } catch (error) {
+        console.error(`[FATAL] [index.html] Exception during raw HTML execution: ${error.message}`);
+      } finally {
+        console.log(`========== [END] index.html: DOM Boot Sequence ==========\n`);
+      }
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

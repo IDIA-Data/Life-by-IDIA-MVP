@@ -1,0 +1,1 @@
+ALTER TABLE public.user_wallets ADD COLUMN IF NOT EXISTS cash_balance numeric DEFAULT 0 NOT NULL;

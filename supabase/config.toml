@@ -1,0 +1,61 @@
+project_id = "zxyngqciipcvveigrzqt"
+
+[api]
+enabled = true
+port = 54321
+
+[db]
+port = 54322
+
+[studio]
+enabled = true
+port = 54323
+
+[inbucket]
+enabled = true
+port = 54324
+
+[storage]
+enabled = true
+
+[auth]
+enabled = true
+
+[edge_runtime]
+enabled = true
+
+[functions.ai-chat]
+verify_jwt = false
+
+[functions.apple-health-sync]
+verify_jwt = false
+
+[functions.crazy-8-security]
+verify_jwt = false
+
+[functions.generate-virtuous-cycle-impacts]
+verify_jwt = false
+
+[functions.google-fit-sync]
+verify_jwt = false
+
+[functions.ingest-strava-data]
+verify_jwt = false
+
+[functions.reset-password]
+verify_jwt = false
+
+[functions.security-event-generator]
+verify_jwt = false
+
+[functions.text-to-speech]
+verify_jwt = false
+
+[functions.validate-proposal]
+verify_jwt = false
+
+[functions.life-pii-bridge]
+verify_jwt = false
+
+[functions.stablecoin-rails]
+verify_jwt = false
