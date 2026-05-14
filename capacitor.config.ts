@@ -1,3 +1,5 @@
+
+/// <reference types="node" />
 import { CapacitorConfig } from "@capacitor/cli";
 
 // Try to load .env for per-machine overrides. If anything goes wrong
@@ -39,7 +41,7 @@ const config: CapacitorConfig = {
       launchAutoHide: true,
       backgroundColor: "#1a1a2e",
     },
-  },
+  bundledWebRuntime: false,
 };
 
 export default config;

@@ -3,18 +3,24 @@ import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Smartphone, Mail, Moon, BellRing, ShieldAlert } from 'lucide-react';
 import { useProfile } from '@/hooks/useProfile';
+import { useToast } from '@/hooks/use-toast';
 
 export function NotificationSettings() {
   const { preferences, updatePreferences } = useProfile();
+  const { toast } = useToast();
 
-  // Helper to safely update boolean preferences
-  const handleToggle = (key: string, value: boolean) => {
-    updatePreferences({ [key]: value });
-  };
-
-  // Helper to safely update string preferences (like times)
-  const handleSelect = (key: string, value: string) => {
-    updatePreferences({ [key]: value });
+  // Helper to safely update preferences with full hydration and lifecycle logging
+  const handlePreferenceUpdate = async (key: string, value: boolean | string) => {
+    console.log(`[NotificationSettings] handlePreferenceUpdate START: Attempting to set '${key}' to ${value}`);
+    try {
+      await updatePreferences({ [key]: value });
+      console.log(`[NotificationSettings] handlePreferenceUpdate SUCCESS: Successfully updated '${key}' in database`);
+    } catch (error) {
+      console.error(`[NotificationSettings] handlePreferenceUpdate ERROR: Failed to update database for '${key}'`, error);
+      toast({ title: 'Update Failed', description: `Could not save preference: ${key}`, variant: 'destructive' });
+    } finally {
+      console.log(`[NotificationSettings] handlePreferenceUpdate END: Completed execution for '${key}'`);
+    }
   };
 
   return (
@@ -35,7 +41,7 @@ export function NotificationSettings() {
           <Switch
             id="in-app-alerts"
             checked={preferences?.in_app_alerts !== false} // Default to true
-            onCheckedChange={(v) => handleToggle('in_app_alerts', v)}
+            onCheckedChange={(v) => handlePreferenceUpdate('in_app_alerts', v)}
           />
         </div>
 
@@ -47,7 +53,7 @@ export function NotificationSettings() {
           <Switch
             id="in-app-sounds"
             checked={preferences?.in_app_sounds !== false}
-            onCheckedChange={(v) => handleToggle('in_app_sounds', v)}
+            onCheckedChange={(v) => handlePreferenceUpdate('in_app_sounds', v)}
           />
         </div>
       </section>
@@ -67,7 +73,7 @@ export function NotificationSettings() {
           <Switch
             id="push-notifications"
             checked={preferences?.push_notifications || false}
-            onCheckedChange={(v) => handleToggle('push_notifications', v)}
+            onCheckedChange={(v) => handlePreferenceUpdate('push_notifications', v)}
           />
         </div>
 
@@ -81,7 +87,7 @@ export function NotificationSettings() {
               <Switch 
                 id="push-activity"
                 checked={preferences?.push_activity !== false}
-                onCheckedChange={(v) => handleToggle('push_activity', v)} 
+                onCheckedChange={(v) => handlePreferenceUpdate('push_activity', v)} 
               />
             </div>
             <div className="flex items-center justify-between gap-3">
@@ -92,7 +98,7 @@ export function NotificationSettings() {
               <Switch 
                 id="push-insights"
                 checked={preferences?.push_insights || false}
-                onCheckedChange={(v) => handleToggle('push_insights', v)} 
+                onCheckedChange={(v) => handlePreferenceUpdate('push_insights', v)} 
               />
             </div>
           </div>
@@ -108,7 +114,7 @@ export function NotificationSettings() {
           </div>
           <Switch 
             checked={preferences?.quiet_hours_enabled || false}
-            onCheckedChange={(v) => handleToggle('quiet_hours_enabled', v)}
+            onCheckedChange={(v) => handlePreferenceUpdate('quiet_hours_enabled', v)}
           />
         </div>
 
@@ -118,7 +124,7 @@ export function NotificationSettings() {
               <Label className="text-xs text-muted-foreground">Quiet Hours Start</Label>
               <Select 
                 value={preferences?.quiet_hours_start || "22:00"}
-                onValueChange={(v) => handleSelect('quiet_hours_start', v)}
+                onValueChange={(v) => handlePreferenceUpdate('quiet_hours_start', v)}
               >
                 <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -133,7 +139,7 @@ export function NotificationSettings() {
               <Label className="text-xs text-muted-foreground">Quiet Hours End</Label>
               <Select 
                 value={preferences?.quiet_hours_end || "08:00"}
-                onValueChange={(v) => handleSelect('quiet_hours_end', v)}
+                onValueChange={(v) => handlePreferenceUpdate('quiet_hours_end', v)}
               >
                 <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -148,7 +154,7 @@ export function NotificationSettings() {
         )}
       </section>
 
-      {/* 4. Supabase Email Guardrails */}
+      {/* 4. Email Guardrails */}
       <section className="space-y-4 pt-4 border-t">
         <div className="flex items-center gap-2">
           <Mail className="w-4 h-4 text-muted-foreground" />
@@ -175,7 +181,7 @@ export function NotificationSettings() {
           <Switch 
             id="email-marketing"
             checked={preferences?.marketing_emails || false}
-            onCheckedChange={(v) => handleToggle('marketing_emails', v)}
+            onCheckedChange={(v) => handlePreferenceUpdate('marketing_emails', v)}
           />
         </div>
 
@@ -187,7 +193,7 @@ export function NotificationSettings() {
           <Switch 
             id="email-reports"
             checked={preferences?.email_reports !== false} // Default to true
-            onCheckedChange={(v) => handleToggle('email_reports', v)}
+            onCheckedChange={(v) => handlePreferenceUpdate('email_reports', v)}
           />
         </div>
       </section>

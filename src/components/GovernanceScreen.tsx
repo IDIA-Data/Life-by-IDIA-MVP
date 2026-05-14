@@ -17,22 +17,33 @@ const GovernanceScreen: React.FC = () => {
 
   useEffect(() => {
     (async () => {
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       if (!user) return;
-      // Anchored to Zero Floor — wallets has no governance_tokens column yet.
-      setBalance(0);
+      const { data, error } = await supabase
+        .from("wallets")
+        .select("governance_tokens")
+        .eq("user_id", user.id)
+        .maybeSingle();
+      if (error) {
+        console.error("[GOVERNANCE] Failed to load IDIA balance:", error.message);
+        setBalance(0);
+        return;
+      }
+      setBalance(Number((data as any)?.governance_tokens ?? 0));
     })();
   }, []);
 
   return (
     <div className="space-y-5 bg-white min-h-screen p-4 pb-24 animate-in fade-in duration-700">
-      {/* Sovereign Governance Credit Card */}
+      {/* IDIA Governance Token Card */}
       <Card className="bg-gradient-to-br from-[hsl(178,42%,32%)] to-[hsl(178,42%,42%)] text-white border-none shadow-xl rounded-[2.5rem] overflow-hidden">
         <CardContent className="p-7">
           <div className="flex justify-between items-start">
             <div className="space-y-1">
               <p className="text-[10px] font-black uppercase tracking-[0.3em] text-teal-100/60">
-                Sovereign Governance Credit
+                IDIA Governance Token
               </p>
               <h1 className="text-4xl font-black">
                 {balance.toLocaleString()} <span className="text-sm font-medium text-teal-100/40">IDIA</span>

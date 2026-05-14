@@ -6,6 +6,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   walletService,
+  NETWORKS,
+  BalanceInfo,
+  TxRequest,
   WalletInfo,
   WalletBalances,
   NetworkConfig,
@@ -50,17 +53,35 @@ export function useWallet(): UseWalletReturn {
   const [balancesLoading, setBalancesLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Load wallet on mount
+  const [balance, setBalance] = useState<BalanceInfo | null>(null);
+  const [isBalanceLoading, setIsBalanceLoading] = useState(false);
+
+  const [activeNetwork, setActiveNetwork] = useState<string>(walletService.getActiveNetworkKey());
+
+  const refreshBalance = useCallback(async () => {
+    if (!walletService.getAddress()) return;
+    setIsBalanceLoading(true);
+    try {
+      const b = await walletService.getBalance();
+      setBalance(b);
+    } finally {
+      setIsBalanceLoading(false);
+    }
+  }, []);
+
+  // Initial load
   useEffect(() => {
     (async () => {
       try {
-        const info = await walletService.loadWallet();
-        setWallet(info);
-      } catch (e: any) {
-        setError(e.message);
-      } finally {
-        setLoading(false);
-      }
+        const exists = await walletService.hasWallet();
+        setHasWallet(exists);
+        if (exists) {
+          const info = await walletService.loadWallet();
+          setWallet(info);
+          if (info) setActiveNetwork(info.activeNetwork);
+        }
+      } catch (e: any) { setError(e.message); }
+      finally { setIsLoading(false); }
     })();
   }, []);
 
@@ -99,29 +120,48 @@ export function useWallet(): UseWalletReturn {
   }, [wallet, refreshBalances]);
 
   const createWallet = useCallback(async () => {
-    const result = await walletService.createWallet();
-    setWallet({ address: result.address, activeNetwork: walletService.getActiveNetworkKey() });
-    return result;
+    setIsLoading(true); setError(null);
+    try {
+      const r = await walletService.createWallet();
+      setWallet({ address: r.address, activeNetwork: walletService.getActiveNetworkKey() });
+      setHasWallet(true);
+      setActiveNetwork(walletService.getActiveNetworkKey());
+      return r;
+    } catch (e: any) { setError(e.message); return null; }
+    finally { setIsLoading(false); }
   }, []);
 
   const importWallet = useCallback(async (mnemonic: string) => {
-    const result = await walletService.importWallet(mnemonic);
-    setWallet({ address: result.address, activeNetwork: walletService.getActiveNetworkKey() });
-    return result;
+    setIsLoading(true); setError(null);
+    try {
+      const r = await walletService.importWallet(mnemonic);
+      setWallet({ address: r.address, activeNetwork: walletService.getActiveNetworkKey() });
+      setHasWallet(true);
+      setActiveNetwork(walletService.getActiveNetworkKey());
+      return true;
+    } catch (e: any) { setError(e.message); return false; }
+    finally { setIsLoading(false); }
   }, []);
+
+  const getSeedPhrase = useCallback(async () => walletService.getSeedPhrase(), []);
 
   const deleteWallet = useCallback(async () => {
     await walletService.deleteWallet();
     setWallet(null);
+    setHasWallet(false);
     setBalances(null);
     setVotingPower(null);
     setDelegatee(null);
   }, []);
 
-  const switchNetwork = useCallback(async (key: string) => {
-    await walletService.switchNetwork(key);
-    setWallet(prev => prev ? { ...prev, activeNetwork: key } : null);
-    // Balances will auto-refresh via the useEffect dependency on wallet
+  const switchNetwork = useCallback(async (networkKey: string) => {
+    setError(null);
+    try {
+      const net = await walletService.switchNetwork(networkKey);
+      setActiveNetwork(networkKey);
+      setBalance(null);
+      return net;
+    } catch (e: any) { setError(e.message); return null; }
   }, []);
 
   const sendNative = useCallback(async (to: string, amount: string) => {
@@ -162,11 +202,26 @@ export function useWallet(): UseWalletReturn {
     switchNetwork,
     createWallet,
     importWallet,
-    deleteWallet,
-    getSeedPhrase: () => walletService.getSeedPhrase(),
     refreshBalances,
     sendNative,
     sendIDIA,
     delegateVotes,
+    getSeedPhrase,
+    deleteWallet,
+    
+    getSeedPhrase: () => walletService.getSeedPhrase(),
+  clearError: useCallback(() => setError(null), []),
+    // network
+    activeNetwork,
+    networks: NETWORKS,
+    switchNetwork,
+    activeNetworkConfig: NETWORKS[activeNetwork] as NetworkConfig,
+    // balance
+    balance,
+    isBalanceLoading,
+    refreshBalance,
+    // transactions
+    estimateTransaction,
+    sendTransaction,
   };
 }

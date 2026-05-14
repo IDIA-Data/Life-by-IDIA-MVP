@@ -8,6 +8,7 @@
 
 import { ethers } from 'ethers';
 import { Preferences } from '@capacitor/preferences';
+import { SecureStoragePlugin } from 'capacitor-secure-storage-plugin';
 import { isNative } from './platform';
 import {
   ACTIVE_DEPLOYMENT,
@@ -30,6 +31,38 @@ export interface NetworkConfig {
 }
 
 export const NETWORKS: Record<string, NetworkConfig> = {
+  coston2: {
+    name: 'Flare Testnet Coston2',
+    chainId: 114,
+    rpcUrl: 'https://coston2-api.flare.network/ext/C/rpc',
+    symbol: 'C2FLR',
+    blockExplorer: 'https://coston2-explorer.flare.network',
+    isTestnet: true,
+  },
+  flare: {
+    name: 'Flare',
+    chainId: 14,
+    rpcUrl: 'https://flare-api.flare.network/ext/C/rpc',
+    symbol: 'FLR',
+    blockExplorer: 'https://flare-explorer.flare.network',
+    isTestnet: false,
+  },
+  ethereum: {
+    name: 'Ethereum',
+    chainId: 1,
+    rpcUrl: 'https://eth.llamarpc.com',
+    symbol: 'ETH',
+    blockExplorer: 'https://etherscan.io',
+    isTestnet: false,
+  },
+  polygon: {
+    name: 'Polygon',
+    chainId: 137,
+    rpcUrl: 'https://polygon-rpc.com',
+    symbol: 'MATIC',
+    blockExplorer: 'https://polygonscan.com',
+    isTestnet: false,
+  },
   base: {
     name: 'Base',
     chainId: 8453,
@@ -74,11 +107,19 @@ export interface TokenBalance {
   name: string;
   balance: string;
   balanceFormatted: string;
+  symbol: string;
+  network: string;
   decimals: number;
   contractAddress?: string;
 }
 
-export interface TransactionResult {
+export interface TxRequest {
+  to: string;
+  amount: string;
+  data?: string;
+}
+
+export interface TxResult {
   hash: string;
   from: string;
   to: string;
@@ -93,7 +134,24 @@ export interface WalletBalances {
   usdc: TokenBalance;
 }
 
-// ── Wallet Service ───────────────────────────────────────────────────
+const KEYS = {
+  MNEMONIC: 'idia_wallet_mnemonic',
+  EXISTS: 'idia_wallet_exists',
+  NETWORK: 'idia_wallet_network',
+} as const;
+
+async function storeSecureKeys(mnemonic: string): Promise<void> {
+  console.log('[START] Wallet: storeSecureKeys');
+  try {
+    await SecureStoragePlugin.set({ key: KEYS.MNEMONIC, value: mnemonic });
+    await SecureStoragePlugin.set({ key: KEYS.EXISTS, value: 'true' });
+    await SecureStoragePlugin.set({ key: KEYS.NETWORK, value: DEFAULT_NETWORK });
+    console.log('[END] Wallet: storeSecureKeys complete');
+  } catch (e) {
+    console.error('[ERROR] Wallet: storeSecureKeys failed', e);
+    throw e;
+  }
+}
 
 class WalletService {
   private wallet: ethers.HDNodeWallet | null = null;
@@ -118,6 +176,9 @@ class WalletService {
     await Preferences.set({ key: STORAGE_KEYS.WALLET_EXISTS, value: 'true' });
     await Preferences.set({ key: STORAGE_KEYS.ACTIVE_NETWORK, value: DEFAULT_NETWORK });
 
+    await storeSecureKeys(mnemonic);
+    this.wallet = w as ethers.HDNodeWallet;
+    this.activeNetwork = DEFAULT_NETWORK;
     this.wallet = w as ethers.HDNodeWallet;
     this.mnemonic = mnemonic;
     this.activeNetwork = DEFAULT_NETWORK;
@@ -129,7 +190,6 @@ class WalletService {
   async importWallet(mnemonic: string): Promise<{ address: string }> {
     const trimmed = mnemonic.trim();
     if (!ethers.Mnemonic.isValidMnemonic(trimmed)) throw new Error('Invalid mnemonic');
-
     const w = ethers.HDNodeWallet.fromMnemonic(ethers.Mnemonic.fromPhrase(trimmed));
     await Preferences.set({ key: STORAGE_KEYS.ENCRYPTED_MNEMONIC, value: trimmed });
     await Preferences.set({ key: STORAGE_KEYS.WALLET_EXISTS, value: 'true' });
@@ -143,9 +203,8 @@ class WalletService {
 
   async loadWallet(): Promise<WalletInfo | null> {
     try {
-      const { value: mnemonic } = await Preferences.get({ key: STORAGE_KEYS.ENCRYPTED_MNEMONIC });
+      const { value: mnemonic } = await SecureStoragePlugin.get({ key: KEYS.MNEMONIC });
       if (!mnemonic) return null;
-
       this.wallet = ethers.HDNodeWallet.fromMnemonic(ethers.Mnemonic.fromPhrase(mnemonic));
       this.mnemonic = mnemonic;
 
@@ -169,13 +228,19 @@ class WalletService {
     } catch { return null; }
   }
 
+  getAddress(): string | null { return this.wallet?.address || null; }
+
+  async getSeedPhrase(): Promise<string | null> {
+    try { const { value } = await SecureStoragePlugin.get({ key: KEYS.MNEMONIC }); return value || null; } catch { return null; }
+  }
+
   async deleteWallet(): Promise<void> {
     this.wallet = null;
     this.mnemonic = null;
     this.activeNetwork = DEFAULT_NETWORK;
-    try { await Preferences.remove({ key: STORAGE_KEYS.ENCRYPTED_MNEMONIC }); } catch {}
-    try { await Preferences.remove({ key: STORAGE_KEYS.WALLET_EXISTS }); } catch {}
-    try { await Preferences.remove({ key: STORAGE_KEYS.ACTIVE_NETWORK }); } catch {}
+    try { await SecureStoragePlugin.remove({ key: KEYS.MNEMONIC }); } catch {}
+    try { await SecureStoragePlugin.remove({ key: KEYS.EXISTS }); } catch {}
+    try { await SecureStoragePlugin.remove({ key: KEYS.NETWORK }); } catch {}
   }
 
   getAddress(): string | null { return this.wallet?.address || null; }
@@ -396,14 +461,33 @@ class WalletService {
       const amountWei = ethers.parseEther(amount);
       const feeData = await provider.getFeeData();
       const gasPrice = feeData.gasPrice || 0n;
-      const gasLimit = await provider.estimateGas({ from: this.wallet.address, to, value: amountWei });
-      const gasFee = gasPrice * gasLimit;
+      const gasLimit = await provider.estimateGas({ from: this.wallet.address, to: req.to, value: amountWei, data: req.data });
+      const gasFeeWei = gasPrice * gasLimit;
       return {
-        gasFeeFormatted: ethers.formatEther(gasFee),
-        totalCostFormatted: ethers.formatEther(amountWei + gasFee),
-        symbol: network.symbol,
+        gasFeeFormatted: ethers.formatEther(gasFeeWei),
+        totalCostFormatted: ethers.formatEther(amountWei + gasFeeWei),
+        symbol: net.symbol,
+        network: net.name,
       };
-    } catch (error) { console.error('Gas estimation failed:', error); return null; }
+    } catch (e) { console.error('Estimate failed:', e); return null; }
+  }
+
+  async sendTransaction(req: TxRequest): Promise<TxResult> {
+    if (!this.wallet) throw new Error('No wallet');
+    if (!ethers.isAddress(req.to)) throw new Error('Invalid recipient address');
+    const net = NETWORKS[this.activeNetwork];
+    const provider = this.getProvider();
+    const signer = this.wallet.connect(provider);
+    const tx = await signer.sendTransaction({ to: req.to, value: ethers.parseEther(req.amount), data: req.data });
+    await tx.wait();
+    return {
+      hash: tx.hash,
+      from: this.wallet.address,
+      to: req.to,
+      amount: req.amount,
+      network: net.name,
+      blockExplorerUrl: `${net.blockExplorer}/tx/${tx.hash}`,
+    };
   }
 }
 

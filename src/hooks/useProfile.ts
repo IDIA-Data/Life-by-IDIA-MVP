@@ -69,69 +69,113 @@ export const useProfile = () => {
   }, []);
 
   const loadProfile = async () => {
+    console.log("[useProfile] loadProfile START: Fetching user profile and preferences");
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      
+      if (authError) {
+        console.error("[useProfile] loadProfile ERROR: Auth fetch failed", authError);
+        setLoading(false);
+        return;
+      }
       if (!user) {
+        console.log("[useProfile] loadProfile WARN: No authenticated user session found");
         setLoading(false);
         return;
       }
 
-      // Load profile
+      console.log(`[useProfile] loadProfile: Executing profile query for user_id: ${user.id}`);
+      // Use maybeSingle() to prevent PGRST116 if the row doesn't exist yet
       const { data: profileData, error: profileError } = await supabase
         .from('profiles')
         .select('*')
         .eq('user_id', user.id)
-        .single();
+        .maybeSingle();
 
-      if (profileError && profileError.code !== 'PGRST116') {
-        console.error('Error loading profile:', profileError);
+      if (profileError) {
+        console.error('[useProfile] loadProfile ERROR: Failed to load profile', profileError);
       } else if (profileData) {
+        console.log('[useProfile] loadProfile SUCCESS: Profile payload retrieved');
         setProfile(profileData as unknown as Profile);
+      } else {
+        console.log('[useProfile] loadProfile INFO: Profile row currently absent');
       }
 
-      // Load preferences
+      console.log(`[useProfile] loadProfile: Executing preferences query for user_id: ${user.id}`);
       const { data: preferencesData, error: preferencesError } = await supabase
         .from('user_preferences')
         .select('*')
         .eq('user_id', user.id)
-        .single();
+        .maybeSingle();
 
-      if (preferencesError && preferencesError.code !== 'PGRST116') {
-        console.error('Error loading preferences:', preferencesError);
+      if (preferencesError) {
+        console.error('[useProfile] loadProfile ERROR: Failed to load preferences', preferencesError);
       } else if (preferencesData) {
+        console.log('[useProfile] loadProfile SUCCESS: Preferences payload retrieved');
         setPreferences(preferencesData as UserPreferences);
+      } else {
+        console.log('[useProfile] loadProfile INFO: Preferences row currently absent');
       }
 
     } catch (error) {
-      console.error('Error loading profile data:', error);
+      console.error('[useProfile] loadProfile ERROR: Unexpected exception caught during fetch', error);
     } finally {
       setLoading(false);
+      console.log("[useProfile] loadProfile END: Execution block complete");
     }
   };
 
   const updateProfile = async (updates: Partial<Profile>) => {
+    console.log("[useProfile] updateProfile START: Processing profile update command", updates);
     setUpdating(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('No user found');
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      if (authError) {
+        console.error("[useProfile] updateProfile ERROR: Auth validation failed", authError);
+        throw authError;
+      }
+      if (!user) {
+        console.error("[useProfile] updateProfile ERROR: No authenticated user found for operation");
+        throw new Error('No user found');
+      }
 
-      const { data, error } = await (supabase
-        .from('profiles') as any)
-        .update(updates)
-        .eq('user_id', user.id)
-        .select()
-        .single();
+      let response;
+      
+      if (profile?.id) {
+        console.log(`[useProfile] updateProfile: Emitting UPDATE for existing profile ID: ${profile.id}`);
+        response = await (supabase.from('profiles') as any)
+          .update(updates)
+          .eq('id', profile.id)
+          .select()
+          .single();
+      } else {
+        console.log(`[useProfile] updateProfile: Emitting UPDATE by user_id check: ${user.id}`);
+        response = await (supabase.from('profiles') as any)
+          .update(updates)
+          .eq('user_id', user.id)
+          .select()
+          .maybeSingle();
 
-      if (error) throw error;
+        // Fallback: If no rows were updated, tunnel a new record
+        if (!response.data && !response.error) {
+          console.log(`[useProfile] updateProfile WARN: Update target absent. Pivoting to INSERT for user_id: ${user.id}`);
+          response = await (supabase.from('profiles') as any)
+            .insert({ user_id: user.id, ...updates })
+            .select()
+            .single();
+        }
+      }
 
-      setProfile(data as unknown as Profile);
-      toast({
-        title: "Success",
-        description: "Profile updated successfully"
-      });
+      if (response.error) {
+        console.error(`[useProfile] updateProfile ERROR: Supabase mutation failed`, response.error);
+        throw response.error;
+      }
+
+      console.log(`[useProfile] updateProfile SUCCESS: Profile database record successfully hydrated`, response.data);
+      setProfile(response.data as unknown as Profile);
 
     } catch (error) {
-      console.error('Error updating profile:', error);
+      console.error('[useProfile] updateProfile ERROR: Exception caught in execution block', error);
       toast({
         title: "Error",
         description: "Failed to update profile",
@@ -139,32 +183,61 @@ export const useProfile = () => {
       });
     } finally {
       setUpdating(false);
+      console.log("[useProfile] updateProfile END: Command release");
     }
   };
 
   const updatePreferences = async (updates: Partial<UserPreferences>) => {
+    console.log("[useProfile] updatePreferences START: Processing preferences update command", updates);
     setUpdating(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('No user found');
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      if (authError) {
+        console.error("[useProfile] updatePreferences ERROR: Auth validation failed", authError);
+        throw authError;
+      }
+      if (!user) {
+        console.error("[useProfile] updatePreferences ERROR: No authenticated user found for operation");
+        throw new Error('No user found');
+      }
 
-      const { data, error } = await (supabase
-        .from('user_preferences') as any)
-        .update(updates)
-        .eq('user_id', user.id)
-        .select()
-        .single();
+      let response;
 
-      if (error) throw error;
+      if (preferences?.id) {
+        console.log(`[useProfile] updatePreferences: Emitting UPDATE for existing preferences ID: ${preferences.id}`);
+        response = await (supabase.from('user_preferences') as any)
+          .update(updates)
+          .eq('id', preferences.id)
+          .select()
+          .single();
+      } else {
+        console.log(`[useProfile] updatePreferences: Emitting UPDATE by user_id check: ${user.id}`);
+        response = await (supabase.from('user_preferences') as any)
+          .update(updates)
+          .eq('user_id', user.id)
+          .select()
+          .maybeSingle();
 
-      setPreferences(data as UserPreferences);
-      toast({
-        title: "Success",
-        description: "Preferences updated successfully"
-      });
+        // Fallback: If no rows were updated, tunnel a new record
+        if (!response.data && !response.error) {
+          console.log(`[useProfile] updatePreferences WARN: Update target absent. Pivoting to INSERT for user_id: ${user.id}`);
+          response = await (supabase.from('user_preferences') as any)
+            .insert({ user_id: user.id, ...updates })
+            .select()
+            .single();
+        }
+      }
+
+      if (response.error) {
+        console.error(`[useProfile] updatePreferences ERROR: Supabase mutation failed`, response.error);
+        throw response.error;
+      }
+
+      console.log(`[useProfile] updatePreferences SUCCESS: Preferences database record successfully hydrated`, response.data);
+      setPreferences(response.data as UserPreferences);
 
     } catch (error) {
-      console.error('Error updating preferences:', error);
+      console.error('[useProfile] updatePreferences ERROR: Exception caught in execution block', error);
       toast({
         title: "Error",
         description: "Failed to update preferences",
@@ -172,6 +245,7 @@ export const useProfile = () => {
       });
     } finally {
       setUpdating(false);
+      console.log("[useProfile] updatePreferences END: Command release");
     }
   };
 

@@ -13,10 +13,52 @@ serve(async (req) => {
 
   try {
     log("START", "Hat eligibility sweep...");
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
-    );
+
+    // ── AUTH GATE: service-role OR Tophat/Security Council holder ──────────
+    const authHeader = req.headers.get("Authorization") || "";
+    if (!authHeader.startsWith("Bearer ")) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    const token = authHeader.replace("Bearer ", "");
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const isServiceCall = token === serviceKey;
+
+    const supabase = createClient(Deno.env.get("SUPABASE_URL")!, serviceKey);
+
+    if (!isServiceCall) {
+      const supabaseAuth = createClient(
+        Deno.env.get("SUPABASE_URL")!,
+        Deno.env.get("SUPABASE_ANON_KEY")!,
+        { global: { headers: { Authorization: authHeader } } },
+      );
+      const { data: claimsData, error: claimsErr } = await supabaseAuth.auth.getClaims(token);
+      if (claimsErr || !claimsData?.claims?.sub) {
+        return new Response(JSON.stringify({ error: "Unauthorized" }), {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      const userId = claimsData.claims.sub as string;
+      const { data: hatRows, error: hatErr } = await supabase
+        .from("dao_hats")
+        .select("hat_type")
+        .eq("user_id", userId)
+        .eq("eligibility_status", "active")
+        .is("revoked_at", null)
+        .in("hat_type", ["tophat", "security_council"]);
+      if (hatErr || !hatRows || hatRows.length === 0) {
+        return new Response(JSON.stringify({ error: "Forbidden: requires Tophat or Security Council hat" }), {
+          status: 403,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      log("AUTH", `Sovereign ${userId} authorized via ${hatRows[0].hat_type} hat.`);
+    } else {
+      log("AUTH", "Service-role caller authorized.");
+    }
 
     const { data: hats, error } = await supabase
       .from("dao_hats")
@@ -24,7 +66,8 @@ serve(async (req) => {
       .is("revoked_at", null);
     if (error) throw error;
 
-    let grayed = 0, severed = 0;
+    let grayed = 0,
+      severed = 0;
     for (const h of hats ?? []) {
       const ageDays = (Date.now() - new Date(h.granted_at).getTime()) / 86400_000;
       let next = h.eligibility_status;
@@ -34,7 +77,8 @@ serve(async (req) => {
         const update: Record<string, unknown> = { eligibility_status: next };
         if (next === "severed") update.revoked_at = new Date().toISOString();
         await supabase.from("dao_hats").update(update).eq("id", h.id);
-        if (next === "grayed") grayed++; else severed++;
+        if (next === "grayed") grayed++;
+        else severed++;
       }
     }
 

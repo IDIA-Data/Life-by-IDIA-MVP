@@ -139,7 +139,7 @@ const Onboarding = () => {
           sessionStorage.removeItem("return_to_hub");
           window.location.href = "com.thebigidia.app://auth/callback";
         } else {
-          navigate("/");
+          navigate("/terms");
         }
       }, 1500);
     } catch (err: unknown) {

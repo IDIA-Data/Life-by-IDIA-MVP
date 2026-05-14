@@ -345,8 +345,13 @@ const DataDashboard = () => {
                     </p>
                   </div>
                 </div>
-              );
-            })()}
+              </div>
+            ) : (
+              <div className="text-center py-8 text-muted-foreground">
+                <CheckCircle className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                <p className="text-sm">All available data sources connected</p>
+              </div>
+            )}
           </div>
 
           <div className="space-y-4">

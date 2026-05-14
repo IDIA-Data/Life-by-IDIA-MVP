@@ -163,7 +163,9 @@ export const useWalletBalance = () => {
           console.error("🚨 [FETCH_BALANCE_LOG] ERROR_END: Ethers reading terminated.");
         }
       } else {
-        console.log("🌐 [FETCH_BALANCE_LOG] INFO: No valid sovereign wallet mapped in profiles. Bypassing ethers fetch.");
+        console.log(
+          "🌐 [FETCH_BALANCE_LOG] INFO: No valid sovereign wallet mapped in profiles. Bypassing ethers fetch.",
+        );
         setUsdcProvisioned(false);
         setUsdcAddress(null);
       }
@@ -244,12 +246,14 @@ export const useWalletBalance = () => {
       }
     };
 
-    setup();
+    // FIX: Catch the floating setup promise to stop white-screen unhandled rejections
+    setup().catch((e) => console.error("🚨 [SETUP_PROMISE_FAULT]:", e));
 
     // Auto-poll the blockchain every 15 seconds parallel to Hub's design
     const interval = setInterval(() => {
       console.log("🔄 [REALTIME_SYNC_LOG] INFO: 15-second polling tick fired for ethers fetch.");
-      fetchBalance();
+      // FIX: Catch the polling loop to prevent silent application crashes
+      fetchBalance().catch((e) => console.error("🚨 [POLL_PROMISE_FAULT]:", e));
     }, 15000);
 
     // React to auth changes — purge state on sign-out, refetch on sign-in
@@ -261,10 +265,13 @@ export const useWalletBalance = () => {
           console.log("🔐 [AUTH_STATE_LOG] ACTION: Purging context and channels due to sign out.");
           purgeLegacyWalletCache();
           setBalance(ZERO_FLOOR);
-          if (channel) supabase.removeChannel(channel);
+          if (channel) {
+            // FIX: Prevent unhandled rejections during channel termination
+            supabase.removeChannel(channel).catch((e) => console.error("🚨 [CHANNEL_CLEANUP_FAULT]:", e));
+          }
         } else if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") {
           console.log("🔐 [AUTH_STATE_LOG] ACTION: Firing fetchBalance due to valid session.");
-          fetchBalance();
+          fetchBalance().catch((e) => console.error("🚨 [AUTH_FETCH_FAULT]:", e));
         }
         console.log("🔐 [AUTH_STATE_LOG] END: Auth event handled successfully.");
       } catch (error) {
@@ -280,9 +287,11 @@ export const useWalletBalance = () => {
       clearInterval(interval);
       if (channel) {
         console.log("🧹 [HOOK_CLEANUP_LOG] ACTION: Removing Supabase realtime channel.");
-        supabase.removeChannel(channel);
+        supabase.removeChannel(channel).catch((e) => console.error("🚨 [UNMOUNT_CHANNEL_FAULT]:", e));
       }
-      authSub.subscription.unsubscribe();
+      if (authSub?.subscription) {
+        authSub.subscription.unsubscribe();
+      }
       console.log("🧹 [HOOK_CLEANUP_LOG] END: Unmount operations completed.");
     };
   }, [fetchBalance, applyRow]);

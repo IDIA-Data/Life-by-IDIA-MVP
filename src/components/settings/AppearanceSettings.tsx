@@ -15,7 +15,66 @@ export function AppearanceSettings() {
     updateHighContrast,
     updateFontSize
   } = useTheme();
-  const { preferences } = useProfile();
+  
+  // Destructure updatePreferences to hydrate the database
+  const { preferences, updatePreferences } = useProfile();
+
+  const handleThemeChange = async (newTheme: 'light' | 'dark') => {
+    console.log(`[AppearanceSettings] handleThemeChange START: Attempting to set theme to '${newTheme}'`);
+    try {
+      if (theme !== newTheme) toggleTheme();
+      await updatePreferences({ theme_preference: newTheme });
+      console.log(`[AppearanceSettings] handleThemeChange SUCCESS: Theme updated to '${newTheme}' in database`);
+    } catch (error) {
+      console.error(`[AppearanceSettings] handleThemeChange ERROR: Failed to save theme preference`, error);
+    } finally {
+      console.log(`[AppearanceSettings] handleThemeChange END`);
+    }
+  };
+
+  const handleAccessibilityChange = async (checked: boolean) => {
+    console.log(`[AppearanceSettings] handleAccessibilityChange START: Attempting to set colorblind mode to '${checked}'`);
+    try {
+      toggleAccessibilityMode();
+      await updatePreferences({ colorblind_mode: checked });
+      console.log(`[AppearanceSettings] handleAccessibilityChange SUCCESS: Colorblind mode updated in database`);
+    } catch (error) {
+      console.error(`[AppearanceSettings] handleAccessibilityChange ERROR: Failed to save colorblind mode preference`, error);
+    } finally {
+      console.log(`[AppearanceSettings] handleAccessibilityChange END`);
+    }
+  };
+
+  const handleHighContrastChange = async (checked: boolean) => {
+    console.log(`[AppearanceSettings] handleHighContrastChange START: Attempting to set high contrast to '${checked}'`);
+    try {
+      updateHighContrast(checked);
+      await updatePreferences({ high_contrast: checked });
+      console.log(`[AppearanceSettings] handleHighContrastChange SUCCESS: High contrast updated in database`);
+    } catch (error) {
+      console.error(`[AppearanceSettings] handleHighContrastChange ERROR: Failed to save high contrast preference`, error);
+    } finally {
+      console.log(`[AppearanceSettings] handleHighContrastChange END`);
+    }
+  };
+
+  const handleFontSizeChange = async (size: 'small' | 'medium' | 'large') => {
+    console.log(`[AppearanceSettings] handleFontSizeChange START: Attempting to set font size to '${size}'`);
+    try {
+      updateFontSize(size);
+      await updatePreferences({ font_size: size });
+      
+      // Force a document-level class update to ensure the size change is instantly visible in the DOM
+      document.documentElement.classList.remove('text-sm', 'text-base', 'text-lg');
+      document.documentElement.classList.add(size === 'small' ? 'text-sm' : size === 'large' ? 'text-lg' : 'text-base');
+      
+      console.log(`[AppearanceSettings] handleFontSizeChange SUCCESS: Font size updated in database and document classes applied`);
+    } catch (error) {
+      console.error(`[AppearanceSettings] handleFontSizeChange ERROR: Failed to save font size preference`, error);
+    } finally {
+      console.log(`[AppearanceSettings] handleFontSizeChange END`);
+    }
+  };
 
   return (
     <div className="space-y-5">
@@ -28,7 +87,7 @@ export function AppearanceSettings() {
         <div className="grid grid-cols-2 gap-2">
           <button
             type="button"
-            onClick={() => theme !== 'light' && toggleTheme()}
+            onClick={() => handleThemeChange('light')}
             className={`flex items-center gap-2 p-2.5 rounded-lg border text-left transition-colors ${
               theme === 'light' ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/50'
             }`}
@@ -38,7 +97,7 @@ export function AppearanceSettings() {
           </button>
           <button
             type="button"
-            onClick={() => theme !== 'dark' && toggleTheme()}
+            onClick={() => handleThemeChange('dark')}
             className={`flex items-center gap-2 p-2.5 rounded-lg border text-left transition-colors ${
               theme === 'dark' ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/50'
             }`}
@@ -64,7 +123,7 @@ export function AppearanceSettings() {
           <Switch
             id="colorblind-mode"
             checked={accessibilityMode === 'colorblind'}
-            onCheckedChange={toggleAccessibilityMode}
+            onCheckedChange={handleAccessibilityChange}
           />
         </div>
 
@@ -76,7 +135,7 @@ export function AppearanceSettings() {
           <Switch
             id="high-contrast"
             checked={preferences?.high_contrast || false}
-            onCheckedChange={updateHighContrast}
+            onCheckedChange={handleHighContrastChange}
           />
         </div>
 
@@ -87,7 +146,7 @@ export function AppearanceSettings() {
           </div>
           <Select
             value={preferences?.font_size || 'medium'}
-            onValueChange={(v: 'small' | 'medium' | 'large') => updateFontSize(v)}
+            onValueChange={handleFontSizeChange}
           >
             <SelectTrigger className="w-32 h-9">
               <SelectValue />

@@ -53,6 +53,18 @@ export const useEnhancedProfile = () => {
   const [updating, setUpdating] = useState(false);
   const { toast } = useToast();
 
+  // ATOMIC SYNC: Listen for profile updates dispatched from other instances of this hook
+  useEffect(() => {
+    const handleProfileSync = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      if (customEvent.detail?.profile) {
+        setProfile((prev) => ({ ...prev, ...customEvent.detail.profile }));
+      }
+    };
+    window.addEventListener("idia-profile-sync", handleProfileSync);
+    return () => window.removeEventListener("idia-profile-sync", handleProfileSync);
+  }, []);
+
   useEffect(() => {
     loadProfileData();
     loadAvailableInterests();
@@ -87,7 +99,7 @@ export const useEnhancedProfile = () => {
           last_name: user.user_metadata?.last_name || displayName.split(" ").slice(1).join(" ") || "",
           email: user.email,
           ai_assistant_name: p.ai_assistant_name || "Friend",
-          account_type: p.account_type || "personal",
+          account_type: p.account_type || "individual",
           display_name: displayName,
           avatar_url: p.avatar_url,
           phone_number: p.phone_number || null,
@@ -150,27 +162,38 @@ export const useEnhancedProfile = () => {
 
       const { trust_score, available_credit_line, ...rest } = updates;
 
-      const { data, error } = await (supabase
-        .from("profiles") as any)
-        .upsert({
-          user_id: user.id,
-          ...rest,
-          trust_score: trust_score,
-          available_credit_line: available_credit_line,
-          updated_at: new Date().toISOString(),
-        }, { onConflict: "user_id" })
+      // Safe defaults guarantee the row satisfies profiles_account_type_check
+      // (allowed: individual | business | enterprise) on first INSERT.
+      const { data, error } = await (supabase.from("profiles") as any)
+        .upsert(
+          {
+            id: user.id,
+            user_id: user.id,
+            platform_guid: user.id,
+            account_type: "individual",
+            ai_assistant_name: "Friend",
+            kyc_tier: 1,
+            ...rest,
+            trust_score: trust_score,
+            available_credit_line: available_credit_line,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "user_id" },
+        )
         .select()
         .single();
 
       if (error) throw error;
 
-      if (profile && data) {
-        setProfile({
-          ...profile,
-          ...updates,
-          ...(data as any),
-        });
-      }
+      // ATOMIC SYNC: Compile the new state, set locally, and broadcast globally
+      const updatedProfile = {
+        ...(profile || {}),
+        ...updates,
+        ...(data as any),
+      } as EnhancedProfile;
+
+      setProfile(updatedProfile);
+      window.dispatchEvent(new CustomEvent("idia-profile-sync", { detail: { profile: updatedProfile } }));
 
       toast({
         title: "Success",
@@ -228,6 +251,7 @@ export const useEnhancedProfile = () => {
       // Cache-bust so the new image swaps in immediately.
       const bustedUrl = `${publicUrl}?t=${Date.now()}`;
 
+      // This will automatically trigger the global idia-profile-sync event inside updateProfile
       await updateProfile({ avatar_url: bustedUrl });
 
       toast({
