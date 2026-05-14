@@ -44,3 +44,4 @@ supabase/.temp/
 contracts/cache/
 contracts/artifacts/
 contracts/typechain-types/
+Native/native/android/SETUP.md
