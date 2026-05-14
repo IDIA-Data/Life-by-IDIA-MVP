@@ -1,58 +1,86 @@
 import Foundation
 import Capacitor
 import HealthKit
+import AVFoundation
+import UIKit
 
 @objc(IDIAHealthPlugin)
-public class IDIAHealthPlugin: CAPPlugin, CAPBridgedPlugin {
+public class IDIAHealthPlugin: CAPPlugin, CAPBridgedPlugin, ObservableObject {
     public let identifier = "IDIAHealthPlugin"
     public let jsName = "IDIAHealth"
     public let pluginMethods: [CAPPluginMethod] = [
         CAPPluginMethod(name: "checkAvailability", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "requestPermissions", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "checkPermissions", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "getHealthData", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "triggerHardwareAction", returnType: CAPPluginReturnPromise)
     ]
-    private let healthStore = HKHealthStore()
-    private var readTypes: Set<HKObjectType> {
-        var types: Set<HKObjectType> = []
-        for id in [HKQuantityTypeIdentifier.stepCount, .heartRate, .activeEnergyBurned, .distanceWalkingRunning, .bodyMass, .height] as [HKQuantityTypeIdentifier] {
-            if let t = HKObjectType.quantityType(forIdentifier: id) { types.insert(t) }
+
+    private let audioEngine = AVAudioEngine()
+    private let playerNode = AVAudioPlayerNode()
+    private var originalBrightness: CGFloat = UIScreen.main.brightness
+
+    // MARK: - HARDWARE COMMANDS (40Hz Gamma / 100% Brightness)
+    
+    @objc func triggerHardwareAction(_ call: CAPPluginCall) {
+        guard let action = call.getString("action") else {
+            call.reject("Missing hardware action identifier")
+            return
         }
-        if let s = HKObjectType.categoryType(forIdentifier: .sleepAnalysis) { types.insert(s) }
-        return types
+
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            
+            if action == "CMD_INIT_FLASHBULB" {
+                // Force 100% Brightness for Active Liveness [cite: 123]
+                self.originalBrightness = UIScreen.main.brightness
+                UIScreen.main.brightness = 1.0
+                
+                // Start Zero-Latency 40Hz Audio [cite: 270]
+                self.setupAndStart40HzAudio()
+                
+                print("🍏 [GAMMA_TRIGGER] 40Hz sequence initiated at 100% brightness.")
+                call.resolve(["status": "active"])
+                
+            } else if action == "CMD_STOP_FLASHBULB" {
+                // Restore original system brightness
+                UIScreen.main.brightness = self.originalBrightness
+                self.stopAudio()
+                
+                print("🍏 [GAMMA_TRIGGER] Sequence terminated.")
+                call.resolve(["status": "restored"])
+            }
+        }
     }
-    @objc func checkAvailability(_ call: CAPPluginCall) { call.resolve(["available": HKHealthStore.isHealthDataAvailable(), "platform": "ios", "apiName": "healthkit"]) }
-    @objc func requestPermissions(_ call: CAPPluginCall) {
-        guard HKHealthStore.isHealthDataAvailable() else { call.resolve(["granted": false]); return }
-        healthStore.requestAuthorization(toShare: nil, read: readTypes) { s, _ in call.resolve(["granted": s]) }
+
+    private func setupAndStart40HzAudio() {
+        let frequency: Float = 40.0
+        let sampleRate = Float(audioEngine.mainMixerNode.outputFormat(forBus: 0).sampleRate)
+        let capacity = AVAudioFrameCount(sampleRate)
+        
+        guard let buffer = AVAudioPCMBuffer(pcmFormat: playerNode.outputFormat(forBus: 0), frameCapacity: capacity) else { return }
+        
+        // Generate Pure 40Hz Sine Wave for Neural Entrainment
+        for i in 0..<Int(capacity) {
+            let val = sinf(2.0 * Float.pi * frequency * Float(i) / sampleRate)
+            buffer.floatChannelData?[0][i] = val * 0.5
+        }
+        
+        audioEngine.attach(playerNode)
+        audioEngine.connect(playerNode, to: audioEngine.mainMixerNode, format: buffer.format)
+        
+        do {
+            try audioEngine.start()
+            playerNode.play()
+            playerNode.scheduleBuffer(buffer, at: nil, options: .loops, completionHandler: nil)
+        } catch {
+            print("🚨 [AUDIO_ERROR] \(error)")
+        }
     }
-    @objc func checkPermissions(_ call: CAPPluginCall) {
-        guard HKHealthStore.isHealthDataAvailable() else { call.resolve(["granted": false]); return }
-        let st = HKObjectType.quantityType(forIdentifier: .stepCount)!
-        call.resolve(["granted": self.healthStore.authorizationStatus(for: st) != .notDetermined])
+
+    private func stopAudio() {
+        playerNode.stop()
+        audioEngine.stop()
     }
-    @objc func getHealthData(_ call: CAPPluginCall) {
-        guard HKHealthStore.isHealthDataAvailable() else { call.reject("HealthKit not available"); return }
-        let fmt = ISO8601DateFormatter(); fmt.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        let start = fmt.date(from: call.getString("startDate") ?? "") ?? Calendar.current.startOfDay(for: Date())
-        let end = fmt.date(from: call.getString("endDate") ?? "") ?? Date()
-        let group = DispatchGroup()
-        var result: [String: Any] = ["recorded_at": ISO8601DateFormatter().string(from: Date()), "source": "apple_health", "device_type": UIDevice.current.model, "type": "health_metrics"]
-        group.enter(); fetchSum(.stepCount, .count(), start, end) { v in if let v = v { result["steps"] = Int(v) }; group.leave() }
-        group.enter(); fetchRecent(.heartRate, HKUnit.count().unitDivided(by: .minute()), start, end) { v in if let v = v { result["heartRate"] = Int(v) }; group.leave() }
-        group.enter(); fetchSum(.activeEnergyBurned, .kilocalorie(), start, end) { v in if let v = v { result["calories"] = Int(v) }; group.leave() }
-        group.enter(); fetchSum(.distanceWalkingRunning, .meter(), start, end) { v in if let v = v { result["distance"] = v }; group.leave() }
-        group.enter(); fetchRecent(.bodyMass, .gramUnit(with: .kilo), start, end) { v in if let v = v { result["weight"] = v }; group.leave() }
-        group.notify(queue: .main) { call.resolve(result as! [String: Any]) }
-    }
-    private func fetchSum(_ id: HKQuantityTypeIdentifier, _ unit: HKUnit, _ s: Date, _ e: Date, _ c: @escaping (Double?) -> Void) {
-        guard let qt = HKQuantityType.quantityType(forIdentifier: id) else { c(nil); return }
-        let q = HKStatisticsQuery(quantityType: qt, quantitySamplePredicate: HKQuery.predicateForSamples(withStart: s, end: e, options: .strictStartDate), options: .cumulativeSum) { _, r, _ in c(r?.sumQuantity()?.doubleValue(for: unit)) }
-        healthStore.execute(q)
-    }
-    private func fetchRecent(_ id: HKQuantityTypeIdentifier, _ unit: HKUnit, _ s: Date, _ e: Date, _ c: @escaping (Double?) -> Void) {
-        guard let st = HKSampleType.quantityType(forIdentifier: id) else { c(nil); return }
-        let q = HKSampleQuery(sampleType: st, predicate: HKQuery.predicateForSamples(withStart: s, end: e, options: .strictEndDate), limit: 1, sortDescriptors: [NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)]) { _, samples, _ in c((samples?.first as? HKQuantitySample)?.quantity.doubleValue(for: unit)) }
-        healthStore.execute(q)
+
+    @objc func checkAvailability(_ call: CAPPluginCall) {
+        call.resolve(["available": HKHealthStore.isHealthDataAvailable()])
     }
 }
