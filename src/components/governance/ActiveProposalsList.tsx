@@ -18,25 +18,12 @@ interface Proposal {
 
 const calculateVoteCost = (n: number) => Math.pow(n, 2);
 
-const ActiveProposalsList: React.FC<{ balance: number }> = ({ balance }) => {
-  const [proposals, setProposals] = useState<Proposal[]>([]);
-  const [loading, setLoading] = useState(true);
+// 1. Extracted Individual Proposal Card Component
+const ProposalCard: React.FC<{ proposal: Proposal; balance: number }> = ({ proposal, balance }) => {
   const [voteWeight, setVoteWeight] = useState([1]);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  useEffect(() => {
-    (async () => {
-      const { data } = await (supabase
-        .from("dao_proposals" as any)
-        .select("*")
-        .eq("voting_modality", "quadratic")
-        .order("created_at", { ascending: false }) as any);
-      if (data) setProposals(data);
-      setLoading(false);
-    })();
-  }, []);
-
-  const handleCastVote = async (proposalId: string) => {
+  const handleCastVote = async () => {
     const cost = calculateVoteCost(voteWeight[0]);
     if (cost > balance) {
       toast({
@@ -51,20 +38,6 @@ const ActiveProposalsList: React.FC<{ balance: number }> = ({ balance }) => {
 
     try {
       console.log(`[VOTE_CAST] VERIFY: Auditing financial metrics for quadratic weight: ${voteWeight[0]}`);
-      const cost = calculateVoteCost(voteWeight[0]);
-
-      if (cost > balance) {
-        const err = new Error(
-          `Insufficient Governance Tokens. Requested weight costs ${cost}, but sovereign balance is ${balance}.`,
-        );
-        console.error(`[VOTE_CAST] VALIDATION_ERROR: ${err.message}`);
-        toast({
-          title: "Insufficient IDIA Tokens",
-          description: `This quadratic weight costs ${cost} tokens.`,
-          variant: "destructive",
-        });
-        throw err;
-      }
 
       console.log(`[VOTE_CAST] AUTH: Retrieving local sovereign identity.`);
       const {
@@ -76,24 +49,25 @@ const ActiveProposalsList: React.FC<{ balance: number }> = ({ balance }) => {
       }
 
       console.log(`[VOTE_CAST] ACA_ANCHOR_START: Requesting hardware-backed biological anchor for vote mapping...`);
-      const { hash, payload } = await generateACAHash(user.id, `proposal_vote_${prop.id}`, [
+      const { hash, payload } = await generateACAHash(user.id, `proposal_vote_${proposal.id}`, [
         "GOVERNANCE_VOTE",
         "LEDGER_WRITE",
       ]);
       console.log(`[VOTE_CAST] ACA_ANCHOR_END: Biological presence verified. SHA-256 Hash Generated: ${hash}`);
 
       console.log(`[VOTE_CAST] NETWORK_START: Transmitting secure vote payload to Wyoming Operational Gateway.`);
-      const { error: voteError } = await (supabase.from("dao_votes" as any).insert({
-        proposal_id: prop.id,
+      
+      const { error: voteError } = await (supabase as any).from("dao_votes").insert({
+        proposal_id: proposal.id,
         user_id: user.id,
         vote_type: "for",
         vote_weight: voteWeight[0],
         aca_hash_key: hash,
         aca_payload: payload,
-      }) as any);
+      });
 
       if (voteError) {
-        if ((voteError as any).code === "23505") {
+        if (voteError.code === "23505") {
           toast({
             title: "Already Voted",
             description: "Sovereign intent on this proposal is already recorded.",
@@ -105,15 +79,16 @@ const ActiveProposalsList: React.FC<{ balance: number }> = ({ balance }) => {
       }
 
       // Burn IDIA tokens via wallet decrement (atomic)
-      const { error: burnError } = await (supabase.rpc as any)("increment_wallet_balance", {
+      const { error: burnError } = await (supabase as any).rpc("increment_wallet_balance", {
         target_user_id: user.id,
         increment_amount: -cost,
       });
+      
       if (burnError) {
         console.warn(`[VOTE_CAST] BURN_WARNING: Token burn failed but vote stands. ${burnError.message}`);
       }
 
-      console.log(`[VOTE_CAST] NETWORK_END: Ledger entry committed. Intent synced for proposal ${prop.id}.`);
+      console.log(`[VOTE_CAST] NETWORK_END: Ledger entry committed. Intent synced for proposal ${proposal.id}.`);
       toast({
         title: "Intent Cast Successfully",
         description: `Secured via ACA Hash ${hash.substring(0, 8)}...`,
@@ -138,10 +113,10 @@ const ActiveProposalsList: React.FC<{ balance: number }> = ({ balance }) => {
       <CardContent className="p-5 space-y-4">
         <div className="space-y-2">
           <Badge className="bg-orange-500 hover:bg-orange-600 text-white text-[9px] font-black uppercase tracking-wider">
-            {prop.status}
+            {proposal.status}
           </Badge>
-          <h3 className="font-black text-lg leading-tight text-slate-800">{prop.title}</h3>
-          <p className="text-xs text-muted-foreground leading-relaxed">{prop.description}</p>
+          <h3 className="font-black text-lg leading-tight text-slate-800">{proposal.title}</h3>
+          <p className="text-xs text-muted-foreground leading-relaxed">{proposal.description}</p>
         </div>
 
         <div className="p-4 bg-teal-50/50 rounded-2xl border border-teal-100/50 space-y-4">
@@ -178,7 +153,7 @@ const ActiveProposalsList: React.FC<{ balance: number }> = ({ balance }) => {
               {isSubmitting ? (
                 <>
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  VERIFYING ACA...
+                  VERIFYING...
                 </>
               ) : (
                 <>
@@ -194,6 +169,7 @@ const ActiveProposalsList: React.FC<{ balance: number }> = ({ balance }) => {
   );
 };
 
+// 2. The Main List Component
 const ActiveProposalsList: React.FC<{ balance: number }> = ({ balance }) => {
   const [proposals, setProposals] = useState<Proposal[]>([]);
   const [loading, setLoading] = useState(true);
@@ -204,11 +180,11 @@ const ActiveProposalsList: React.FC<{ balance: number }> = ({ balance }) => {
     (async () => {
       console.log("[ACTIVE_PROPOSALS] START: Initializing protocol fetch for active quadratic proposals.");
       try {
-        const { data, error } = await (supabase
-          .from("dao_proposals" as any)
+        const { data, error } = await (supabase as any)
+          .from("dao_proposals")
           .select("*")
           .eq("voting_modality", "quadratic")
-          .order("created_at", { ascending: false }) as any);
+          .order("created_at", { ascending: false });
 
         if (error) {
           throw error;
@@ -265,35 +241,7 @@ const ActiveProposalsList: React.FC<{ balance: number }> = ({ balance }) => {
   return (
     <div className="space-y-5">
       {proposals.map((prop) => (
-        <Card key={prop.id} className="border-teal-50 shadow-sm rounded-3xl">
-          <CardContent className="p-5 space-y-4">
-            <div className="space-y-1">
-              <Badge className="bg-orange-500 text-white text-[8px] font-black uppercase">{prop.status}</Badge>
-              <h3 className="font-black text-base">{prop.title}</h3>
-              <p className="text-[11px] text-muted-foreground leading-relaxed">{prop.description}</p>
-            </div>
-
-            <div className="p-4 bg-teal-50/30 rounded-2xl border border-teal-100/50 space-y-3">
-              <div className="flex justify-between items-center text-[9px] font-black uppercase">
-                <span className="text-teal-700">Quadratic Weight</span>
-                <span className="text-orange-600">Cost: {calculateVoteCost(voteWeight[0])} IDIA</span>
-              </div>
-              <Slider value={voteWeight} onValueChange={setVoteWeight} max={50} step={1} />
-              <div className="flex justify-between items-center">
-                <p className="text-xl font-black text-teal-800">
-                  {voteWeight[0]} <span className="text-[10px] font-bold text-teal-600/50">VOTES</span>
-                </p>
-                <Button
-                  onClick={() => handleCastVote(prop.id)}
-                  disabled={isSubmitting}
-                  className="bg-[hsl(178,42%,32%)] hover:bg-teal-700 text-white font-black uppercase text-[9px] px-6 rounded-full h-9"
-                >
-                  {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : "Sync Intent"}
-                </Button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        <ProposalCard key={prop.id} proposal={prop} balance={balance} />
       ))}
     </div>
   );

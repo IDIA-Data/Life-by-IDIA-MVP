@@ -19,8 +19,7 @@ import {
   Shield,
   ArrowUpRight,
   ArrowDownLeft,
-  DollarSign,
-  Loader2
+  DollarSign
 } from 'lucide-react';
 
 interface NFCPayrollModalProps {
@@ -45,7 +44,7 @@ export const NFCPayrollModal: React.FC<NFCPayrollModalProps> = ({ isOpen, onClos
   const [peerToken, setPeerToken] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const { sendTransaction, activeNetwork } = useWallet();
+  const { wallet, sendTransaction, activeNetwork } = useWallet();
   const { toast } = useToast();
 
   useEffect(() => {
@@ -107,19 +106,6 @@ export const NFCPayrollModal: React.FC<NFCPayrollModalProps> = ({ isOpen, onClos
     console.log(`💸 [TRANSACTION_DISPATCH_START] Executing ${mode} of ${amount} ${rail.toUpperCase()}`);
     setIsProcessing(true);
 
-    // 3. Cleanup global listeners when modal closes to prevent memory leaks
-    return () => {
-      console.log("🧹 [NFC_MODAL_LOG] END: Cleaning up global NFC listeners");
-      delete (window as any).onNfcHandshakeComplete;
-      delete (window as any).onNfcHandshakeError;
-    };
-  }, [isOpen]);
-
-  const handleRetry = () => {
-    // Re-triggering the useEffect logic by resetting the state
-    setConnectionStep('syncing');
-    setErrorMessage(null);
-    
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Auth void: User not securely identified.");
@@ -137,7 +123,7 @@ export const NFCPayrollModal: React.FC<NFCPayrollModalProps> = ({ isOpen, onClos
       const netKey = String((activeNetwork as any)?.key || 'polygon').toLowerCase();
       console.log(`💸 [TRANSACTION_EXECUTE] Constructing USDC ERC-20 payload for network: ${netKey}`);
       
-      const usdcAddress = USDC_CONTRACTS[activeNetwork.toLowerCase()] || USDC_CONTRACTS['polygon'];
+      const usdcAddress = USDC_CONTRACTS[netKey] || USDC_CONTRACTS['polygon'];
       const erc20Interface = new ethers.Interface(["function transfer(address to, uint256 amount)"]);
       
       // USDC uses 6 decimals standard
@@ -157,14 +143,13 @@ export const NFCPayrollModal: React.FC<NFCPayrollModalProps> = ({ isOpen, onClos
           value: "0",     
           data: dataPayload
         });
+        if (!result) throw new Error("Web3 EVM Settlement failed or was rejected by user.");
         txHash = result.hash || txHash;
       } else {
         console.warn("⚠️ Standard sendTransaction missing from wallet interface. Using simulated hash for edge function progression.");
         await new Promise(r => setTimeout(r, 1000)); // Simulate UI loading
       }
 
-      if (!result) throw new Error("Web3 EVM Settlement failed or was rejected by user.");
-      const txHash = result.hash;
       console.log(`✅ [TRANSACTION_EXECUTE] Web3 Settlement Broadcasted. Hash: ${txHash}`);
 
       console.log(`🔐 [VERIFIER] Passing hash to IDIA Edge Function (life-usdc-nfc-settlement) for ACA generation & Ledgering...`);
@@ -172,7 +157,7 @@ export const NFCPayrollModal: React.FC<NFCPayrollModalProps> = ({ isOpen, onClos
       const { data: verifierData, error: verifierError } = await supabase.functions.invoke('life-usdc-nfc-settlement', {
         body: {
           txHash: txHash,
-          network: activeNetwork,
+          network: netKey,
           mode: mode,
           peerToken: peerToken,
           amount: numericAmount.toString()
@@ -442,7 +427,7 @@ export const NFCPayrollModal: React.FC<NFCPayrollModalProps> = ({ isOpen, onClos
               </div>
 
               <div className="flex space-x-3">
-                <Button onClick={startNfcSync} className="flex-1">
+                <Button onClick={handleRetry} className="flex-1">
                   Retry Handshake
                 </Button>
                 <Button variant="outline" onClick={() => setConnectionStep('config')}>

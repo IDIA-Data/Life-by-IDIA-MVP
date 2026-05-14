@@ -1,4 +1,3 @@
-
 /// <reference types="node" />
 import { CapacitorConfig } from "@capacitor/cli";
 
@@ -41,7 +40,7 @@ const config: CapacitorConfig = {
       launchAutoHide: true,
       backgroundColor: "#1a1a2e",
     },
-  bundledWebRuntime: false,
+  },
 };
 
 export default config;

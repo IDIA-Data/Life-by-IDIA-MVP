@@ -1,5 +1,4 @@
-
-import { useState, useEffect, useRef, useMemo } from "react"; // Added useMemo
+import { useState, useEffect, useRef, useMemo } from "react";
 import { Wallet, Database, Users, ShoppingBag, Vote, Crown } from "lucide-react";
 import { useEnhancedProfile } from "@/hooks/useEnhancedProfile";
 import EnhancedWalletDashboard from "./enhanced/EnhancedWalletDashboard";
@@ -89,15 +88,6 @@ const MainApp = () => {
     window.addEventListener("showFriend", handleShowFriend as EventListener);
     return () => window.removeEventListener("showFriend", handleShowFriend as EventListener);
   }, []);
-
-  const tabs = [
-    { id: "wallet", label: "Wallet", icon: Wallet, component: EnhancedWalletDashboard },
-    { id: "data", label: "Data", icon: Database, component: DataDashboard },
-    { id: "life", label: "Life", icon: Users, component: LifeScreen },
-    { id: "shop", label: "Shop", icon: ShoppingBag, component: ShopScreen },
-    { id: "vote", label: "Gov", icon: Vote, component: GovernanceScreen },
-    { id: "pro", label: "Pro", icon: Crown, component: ProScreen },
-  ];
 
   const ActiveComponent = tabs.find((tab) => tab.id === activeTab)?.component || EnhancedWalletDashboard;
 

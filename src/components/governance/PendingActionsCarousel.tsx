@@ -35,8 +35,8 @@ const PendingActionsCarousel: React.FC = () => {
   const fetchActions = async () => {
     console.log("[PENDING_ACTIONS] START: Syncing optimistic timelock actions from Wyoming Gateway.");
     try {
-      const { data, error } = await supabase
-        .from("dao_pending_actions" as any)
+      const { data, error } = await (supabase as any)
+        .from("dao_pending_actions")
         .select("*")
         .eq("status", "pending")
         .order("timelock_expires_at", { ascending: true });
@@ -44,7 +44,7 @@ const PendingActionsCarousel: React.FC = () => {
       if (error) throw error;
 
       console.log(`[PENDING_ACTIONS] SUCCESS: Retrieved ${data?.length || 0} pending actions.`);
-      setActions((data as any) || []);
+      setActions(data || []);
     } catch (err: any) {
       console.error(`[PENDING_ACTIONS] CRITICAL_FAILURE: Failed to query pending actions. Reason: ${err.message}`);
       toast({
@@ -122,7 +122,9 @@ const PendingActionsCarousel: React.FC = () => {
       console.log(`[VETO_ACTION] ACA_ANCHOR_END: Biological presence verified. SHA-256 Hash Generated: ${hash}`);
 
       console.log(`[VETO_ACTION] NETWORK_START: Transmitting secure veto payload to Wyoming Operational Gateway.`);
-      const { error: ledgerError } = await supabase.from("dao_vetoes" as any).insert({
+      
+      // FIX: Cast supabase to any to prevent 'never' type inference errors
+      const { error: ledgerError } = await (supabase as any).from("dao_vetoes").insert({
         action_id: actionId,
         user_id: user.id,
         aca_hash_key: hash,
@@ -130,7 +132,7 @@ const PendingActionsCarousel: React.FC = () => {
       });
 
       if (ledgerError) {
-        if ((ledgerError as any).code === "23505") {
+        if (ledgerError.code === "23505") {
           toast({
             title: "Already Vetoed",
             description: "Your sovereign veto on this action is already on the ledger.",
@@ -179,7 +181,6 @@ const PendingActionsCarousel: React.FC = () => {
         <p className="text-[10px] font-bold uppercase tracking-widest text-orange-600/70">
           No Pending Actions in Timelock
         </p>
-        <p className="text-[10px] font-bold uppercase tracking-widest">No Pending Actions in Timelock</p>
       </div>
     );
   }
@@ -209,8 +210,6 @@ const PendingActionsCarousel: React.FC = () => {
                 <h4 className="font-black text-sm leading-tight text-slate-800">{a.title}</h4>
                 <p className="text-[11px] text-muted-foreground line-clamp-3 leading-relaxed">{a.description}</p>
               </div>
-              <h4 className="font-black text-sm leading-tight">{a.title}</h4>
-              <p className="text-[11px] text-muted-foreground line-clamp-3">{a.description}</p>
 
               <div className="flex items-center gap-1.5 text-[10px] font-bold text-orange-600 bg-orange-50/80 p-2 rounded-lg border border-orange-100/50">
                 <Clock size={12} className="animate-pulse" />

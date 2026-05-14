@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -70,8 +69,8 @@ const CommitteesList: React.FC = () => {
       } = await supabase.auth.getUser();
 
       // 1. Fetch live active officer counts from the Hats wardrobe ledger
-      const { data: hatsData, error: hatsError } = await supabase
-        .from("dao_hats" as any)
+      const { data: hatsData, error: hatsError } = await (supabase as any)
+        .from("dao_hats")
         .select("hat_type")
         .eq("eligibility_status", "active")
         .is("revoked_at", null);
@@ -86,8 +85,8 @@ const CommitteesList: React.FC = () => {
 
       // 2. Fetch current user's pending applications to prevent duplicate submissions
       if (user) {
-        const { data: appsData, error: appsError } = await supabase
-          .from("committee_applications" as any)
+        const { data: appsData, error: appsError } = await (supabase as any)
+          .from("committee_applications")
           .select("committee_id")
           .eq("user_id", user.id);
 
@@ -172,7 +171,8 @@ const CommitteesList: React.FC = () => {
       );
 
       console.log(`[COMMITTEE_APPLICATION] NETWORK_START: Transmitting secure payload to Delaware MSA Registry.`);
-      const { error: ledgerError } = await supabase.from("committee_applications" as any).insert({
+      // Fixed: Cast the entire supabase object to any to bypass inference
+      const { error: ledgerError } = await (supabase as any).from("committee_applications").insert({
         user_id: user.id,
         committee_id: selectedCommittee?.id,
         statement_of_competence: statement,

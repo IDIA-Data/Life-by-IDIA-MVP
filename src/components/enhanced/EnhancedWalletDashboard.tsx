@@ -24,7 +24,7 @@ import { IS_TESTNET } from "@/config/contracts";
 import { USDC_PAYMENTS_ENABLED } from "@/config/usdc";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
-import NFCPayrollModal from "../NFCPayrollModal";
+import { NFCPayrollModal } from "../NFCPayrollModal";
 import SendRequestModal from "../SendRequestModal";
 import PaymentTrigger from "../PaymentTrigger";
 import RequestPaymentQR from "../RequestPaymentQR";
@@ -41,12 +41,10 @@ import {
   Plus,
   BrainCircuit,
   ArrowRight,
-  AlertOctagon,
   Activity,
   Hash,
   Clock,
   Fingerprint,
-  Info,
   Copy,
   Check,
   AlertTriangle,
@@ -111,7 +109,6 @@ const EnhancedWalletDashboard: React.FC = () => {
     activeNetwork, activeNetworkKey, availableNetworks, switchNetwork,
     createWallet, importWallet, deleteWallet, getSeedPhrase,
     refreshBalances, sendNative, sendIDIA, delegateVotes,
-    error: walletError,
   } = useWallet();
 
   const hasWallet = wallet !== null;
@@ -123,7 +120,7 @@ const EnhancedWalletDashboard: React.FC = () => {
     try {
       const newWallet = await createWallet();
       if (newWallet?.address && stableUserId) await syncWalletToSupabase(newWallet.address);
-      const seed = getSeedPhrase();
+      const seed = await getSeedPhrase(); // FIXED: Added await here!
       return newWallet ? { address: newWallet.address, mnemonic: seed || newWallet.mnemonic || "" } : null;
     } catch (error) { console.error("Wallet creation error:", error); return null; }
   };
@@ -142,7 +139,7 @@ const EnhancedWalletDashboard: React.FC = () => {
   };
 
   const handleGetSeedPhrase = async (): Promise<string | null> => {
-    try { return getSeedPhrase(); }
+    try { return await getSeedPhrase(); } // FIXED: Added await here!
     catch (error) { console.error("Seed phrase error:", error); return null; }
   };
 
@@ -461,9 +458,6 @@ const EnhancedWalletDashboard: React.FC = () => {
                           </Badge>
                         </div>
                       </div>
-                      <div className={`font-black text-xs shrink-0 ${getTransactionColor(tx.amount)}`}>
-                        {formatAmount(tx.amount, tx.source)}
-                      </div>
                       <div className={`font-semibold ${getTransactionColor(tx.amount)}`}>{formatAmount(tx.amount, tx.source)}</div>
                     </div>
                   );
@@ -548,6 +542,7 @@ const EnhancedWalletDashboard: React.FC = () => {
                       <p className="text-xs text-muted-foreground">Wallet Address</p>
                       <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => navigator.clipboard.writeText(wallet.address)}><Copy className="w-3 h-3" /></Button>
                     </div>
+                    <p className="font-mono text-xs break-all text-muted-foreground mb-2">{wallet.address}</p>
                     <Button
                       variant="outline"
                       className="w-full"
@@ -559,77 +554,7 @@ const EnhancedWalletDashboard: React.FC = () => {
                       <Shield className="w-4 h-4 mr-2" /> Reveal Recovery Phrase
                     </Button>
                   </div>
-                     ) : (
-                  <div className="grid grid-cols-2 gap-3 mt-3">
-                    <Button
-                      onClick={() => {
-                        setSetupMode("create");
-                        setIsSetupModalOpen(true);
-                      }}
-                    >
-                      <Shield className="w-4 h-4 mr-2" /> Create
-                    </Button>
-                    <Button
-                      variant="outline"
-                      onClick={() => {
-                        setSetupMode("import");
-                        setIsSetupModalOpen(true);
-                      }}
-                    >
-                      <Download className="w-4 h-4 mr-2" /> Import
-                    </Button>
-                  </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
-
-      {/* --- AUDIT RECEIPT POP-UP (ACCESSIBILITY FIXED) --- */}
-      <Dialog open={!!selectedTransaction} onOpenChange={(open) => !open && setSelectedTransaction(null)}>
-        <DialogContent className="max-w-md p-0 overflow-hidden border-none rounded-3xl shadow-2xl bg-white">
-          <DialogHeader className="p-0">
-            <div className="bg-teal-700 p-8 text-white relative">
-              <div className="flex justify-between items-start mb-6">
-                <div className="space-y-1">
-                  <DialogTitle className="text-[10px] font-black uppercase tracking-[0.2em] opacity-60 m-0">
-                    Sovereign Receipt
-                  </DialogTitle>
-                  <DialogDescription className="font-mono text-[9px] opacity-40 text-white">
-                    ID: {selectedTransaction?.id}
-                  </DialogDescription>
-                </div>
-                <Activity className="w-8 h-8 opacity-20" />
-              </div>
-              <div className="text-center py-4">
-                <p className="text-[11px] font-bold uppercase tracking-widest opacity-60 mb-1">Verified Amount</p>
-                <h2 className="text-4xl font-black tracking-tight">
-                  {selectedTransaction && formatAmount(selectedTransaction.amount, selectedTransaction.source)}
-                </h2>
-                <Badge className="mt-4 bg-white/10 hover:bg-white/20 border-white/20 text-[10px] font-black uppercase tracking-widest px-3 py-1">
-                  {selectedTransaction?.transaction_type?.replace(/_/g, " ")}
-                </Badge>
-              </div>
-            </div>
-          </DialogHeader>
-
-          <div className="p-6 space-y-6">
-            <div className="grid grid-cols-2 gap-6">
-              <div className="space-y-1">
-                <div className="flex items-center gap-1.5 text-slate-400 text-[10px] font-bold uppercase tracking-wider">
-                  <Clock size={12} /> Verification Time
-                </div>
-                <p className="text-sm font-bold text-slate-800">
-                  {selectedTransaction && new Date(selectedTransaction.created_at).toLocaleString()}
-                </p>
-              </div>
-              <div className="space-y-1">
-                <div className="flex items-center gap-1.5 text-slate-400 text-[10px] font-bold uppercase tracking-wider">
-                  <Hash size={12} /> Asset Rail
-                </div>
-                <p className="text-sm font-bold text-slate-800">{selectedTransaction?.source}</p> 
-              
+                  
                   {/* Balances — ETH, IDIA, USDC */}
                   <div className="space-y-3">
                     {/* ETH */}
@@ -754,6 +679,55 @@ const EnhancedWalletDashboard: React.FC = () => {
             </Card>
           )}
           </div>
+        </TabsContent>
+      </Tabs>
+
+      {/* --- AUDIT RECEIPT POP-UP (ACCESSIBILITY FIXED) --- */}
+      <Dialog open={!!selectedTransaction} onOpenChange={(open) => !open && setSelectedTransaction(null)}>
+        <DialogContent className="max-w-md p-0 overflow-hidden border-none rounded-3xl shadow-2xl bg-white">
+          <DialogHeader className="p-0">
+            <div className="bg-teal-700 p-8 text-white relative">
+              <div className="flex justify-between items-start mb-6">
+                <div className="space-y-1">
+                  <DialogTitle className="text-[10px] font-black uppercase tracking-[0.2em] opacity-60 m-0">
+                    Sovereign Receipt
+                  </DialogTitle>
+                  <DialogDescription className="font-mono text-[9px] opacity-40 text-white">
+                    ID: {selectedTransaction?.id}
+                  </DialogDescription>
+                </div>
+                <Activity className="w-8 h-8 opacity-20" />
+              </div>
+              <div className="text-center py-4">
+                <p className="text-[11px] font-bold uppercase tracking-widest opacity-60 mb-1">Verified Amount</p>
+                <h2 className="text-4xl font-black tracking-tight">
+                  {selectedTransaction && formatAmount(selectedTransaction.amount, selectedTransaction.source)}
+                </h2>
+                <Badge className="mt-4 bg-white/10 hover:bg-white/20 border-white/20 text-[10px] font-black uppercase tracking-widest px-3 py-1">
+                  {selectedTransaction?.transaction_type?.replace(/_/g, " ")}
+                </Badge>
+              </div>
+            </div>
+          </DialogHeader>
+
+          <div className="p-6 space-y-6">
+            <div className="grid grid-cols-2 gap-6">
+              <div className="space-y-1">
+                <div className="flex items-center gap-1.5 text-slate-400 text-[10px] font-bold uppercase tracking-wider">
+                  <Clock size={12} /> Verification Time
+                </div>
+                <p className="text-sm font-bold text-slate-800">
+                  {selectedTransaction && new Date(selectedTransaction.created_at).toLocaleString()}
+                </p>
+              </div>
+              <div className="space-y-1">
+                <div className="flex items-center gap-1.5 text-slate-400 text-[10px] font-bold uppercase tracking-wider">
+                  <Hash size={12} /> Asset Rail
+                </div>
+                <p className="text-sm font-bold text-slate-800">{selectedTransaction?.source}</p> 
+              </div>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
 
@@ -775,6 +749,11 @@ const EnhancedWalletDashboard: React.FC = () => {
         onImportWallet={handleImportWallet}
         getSeedPhrase={handleGetSeedPhrase}
         walletAddress={displayAddress}
+      />
+      <RequestPaymentQR 
+        isOpen={showRequestPayment} 
+        onClose={() => setShowRequestPayment(false)} 
+        walletAddress={displayAddress || ""} // FIXED: Added required prop
       />
     </div>
   );
