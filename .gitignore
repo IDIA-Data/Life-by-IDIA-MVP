@@ -14,7 +14,8 @@ npm-debug.log*
 
 # Environment & secrets
 
-
+*.keystore
+*.jks
 .env
 .env.local
 .env.production

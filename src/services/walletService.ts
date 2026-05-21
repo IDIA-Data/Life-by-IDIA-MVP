@@ -107,8 +107,7 @@ export interface TokenBalance {
   name: string;
   balance: string;
   balanceFormatted: string;
-  symbol: string;
-  network: string;
+  network?: string;
   decimals: number;
   contractAddress?: string;
 }
@@ -127,6 +126,9 @@ export interface TxResult {
   network: string;
   blockExplorerUrl: string;
 }
+
+// Alias for backwards compatibility
+export type TransactionResult = TxResult;
 
 export interface WalletBalances {
   eth: TokenBalance;
@@ -195,6 +197,9 @@ class WalletService {
     await Preferences.set({ key: STORAGE_KEYS.WALLET_EXISTS, value: 'true' });
     await Preferences.set({ key: STORAGE_KEYS.ACTIVE_NETWORK, value: DEFAULT_NETWORK });
 
+    // Write to SecureStoragePlugin so loadWallet() can find it
+    await storeSecureKeys(trimmed);
+
     this.wallet = w;
     this.mnemonic = trimmed;
     this.activeNetwork = DEFAULT_NETWORK;
@@ -203,7 +208,22 @@ class WalletService {
 
   async loadWallet(): Promise<WalletInfo | null> {
     try {
-      const { value: mnemonic } = await SecureStoragePlugin.get({ key: KEYS.MNEMONIC });
+      // Try SecureStoragePlugin first (preferred), fall back to Preferences
+      let mnemonic: string | null = null;
+      try {
+        const result = await SecureStoragePlugin.get({ key: KEYS.MNEMONIC });
+        mnemonic = result.value || null;
+      } catch {
+        // SecureStoragePlugin key doesn't exist — try Preferences fallback
+        const result = await Preferences.get({ key: STORAGE_KEYS.ENCRYPTED_MNEMONIC });
+        mnemonic = result.value || null;
+
+        // If found in Preferences, migrate to SecureStorage for next load
+        if (mnemonic) {
+          try { await storeSecureKeys(mnemonic); } catch {}
+        }
+      }
+
       if (!mnemonic) return null;
       this.wallet = ethers.HDNodeWallet.fromMnemonic(ethers.Mnemonic.fromPhrase(mnemonic));
       this.mnemonic = mnemonic;
@@ -228,11 +248,13 @@ class WalletService {
     } catch { return null; }
   }
 
-  getAddress(): string | null { return this.wallet?.address || null; }
+  getConnectedSigner(): ethers.Wallet | null {
+  if (!this.wallet) return null;
+  const network = NETWORKS[this.activeNetwork];
+  const provider = new ethers.JsonRpcProvider(network.rpcUrl, network.chainId);
+  return new ethers.Wallet(this.wallet.privateKey, provider);
+}
 
-  async getSeedPhrase(): Promise<string | null> {
-    try { const { value } = await SecureStoragePlugin.get({ key: KEYS.MNEMONIC }); return value || null; } catch { return null; }
-  }
 
   async deleteWallet(): Promise<void> {
     this.wallet = null;
@@ -461,13 +483,12 @@ class WalletService {
       const amountWei = ethers.parseEther(amount);
       const feeData = await provider.getFeeData();
       const gasPrice = feeData.gasPrice || 0n;
-      const gasLimit = await provider.estimateGas({ from: this.wallet.address, to: req.to, value: amountWei, data: req.data });
+      const gasLimit = await provider.estimateGas({ from: this.wallet.address, to, value: amountWei });
       const gasFeeWei = gasPrice * gasLimit;
       return {
         gasFeeFormatted: ethers.formatEther(gasFeeWei),
         totalCostFormatted: ethers.formatEther(amountWei + gasFeeWei),
-        symbol: net.symbol,
-        network: net.name,
+        symbol: network.symbol,
       };
     } catch (e) { console.error('Estimate failed:', e); return null; }
   }

@@ -6,16 +6,11 @@
  * ACTIVE_DEPLOYMENT controls which network the app targets:
  *   'mainnet' (default) — Base mainnet (Chain ID 8453) for production
  *   'testnet'           — Base Sepolia (Chain ID 84532) for internal testing
- *
- * To build for internal testing, change ACTIVE_DEPLOYMENT to 'testnet'.
- * For production releases, leave it as 'mainnet'.
  */
 
 export type DeploymentEnv = 'testnet' | 'mainnet';
 
 // ─── MASTER TOGGLE ──────────────────────────────────────────────────
-// Change to 'testnet' for internal test builds only.
-// Production builds MUST use 'mainnet'.
 export const ACTIVE_DEPLOYMENT: DeploymentEnv = 'mainnet';
 // ─────────────────────────────────────────────────────────────────────
 
@@ -39,13 +34,12 @@ interface ProtocolAddresses {
 }
 
 const DEPLOYMENTS: Record<DeploymentEnv, ProtocolAddresses> = {
-  // ── Base Mainnet (Chain ID 8453) — Production ─────────────────
   mainnet: {
     safe: '0x0910EF34C9F59A90d90FF505B1036DEed4a25d59',
     treasury: '0xd816D83703764551A7F292dbC435669AA89631a7',
     timelock: '0xd3Fd7dD19a4aFD41c8C7FeEdC6d05d77B1141BC5',
     idiaToken: '0x6526F939D257E67896821c25B6C24Daa404a01FB',
-    governor: '0xe70714DaeEB58AdA83A698634d20f44acDD87470',
+    governor: '0x9777067CAd2892D20decAF1a5ccb78e6B291B87a',
     registry: '0x137D913d89d0D6a5b2d1Db76173770C94d25387B',
     poolFactory: '0x0188FCB027D834E03DD0288D360937ceC4d267bb',
     liabilityReceipt: '0x5eA57335f7086f1C069d769a9012835B80a00BD3',
@@ -58,14 +52,12 @@ const DEPLOYMENTS: Record<DeploymentEnv, ProtocolAddresses> = {
     },
     usdc: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
   },
-
-  // ── Base Sepolia (Chain ID 84532) — Internal Testing ──────────
   testnet: {
     safe: '0x0910EF34C9F59A90d90FF505B1036DEed4a25d59',
     treasury: '0xd816D83703764551A7F292dbC435669AA89631a7',
     timelock: '0xab31029D8A9F2b79233E4fAF8eEb80330613af55',
     idiaToken: '0x18306e920946FA7e42990C5D6F9402750407bF4B',
-    governor: '0xc91f062d37f178b766F4424df544c3CA1AC3D7FD',
+    governor: '0x9777067CAd2892D20decAf1a5ccb78e6B291B87a',
     registry: '0xDf7e629eb6083FEe5c66DfF3D4b4A682C4cC1C08',
     poolFactory: '0xDf7e629eb6083FEe5c66DfF3D4b4A682C4cC1C08',
     liabilityReceipt: '0x9f7aA33e0Cb21252A7E00C570768a4fd72A06A36',
@@ -81,14 +73,9 @@ const DEPLOYMENTS: Record<DeploymentEnv, ProtocolAddresses> = {
 };
 
 export const PROTOCOL = DEPLOYMENTS[ACTIVE_DEPLOYMENT];
-
-/**
- * Helper to check if we're running in test mode.
- * Use this throughout the app instead of checking ACTIVE_DEPLOYMENT directly.
- */
 export const IS_TESTNET = ACTIVE_DEPLOYMENT === 'testnet';
 
-// ── Minimal ABIs (only the functions the app needs to call) ─────────
+// ── ABIs ────────────────────────────────────────────────────────────
 
 export const IDIA_TOKEN_ABI = [
   'function name() view returns (string)',
@@ -101,6 +88,7 @@ export const IDIA_TOKEN_ABI = [
   'function delegate(address delegatee)',
   'function delegates(address account) view returns (address)',
   'function getVotes(address account) view returns (uint256)',
+  'function getPastTotalSupply(uint256 blockNumber) view returns (uint256)',
   'function totalSupply() view returns (uint256)',
 ];
 
@@ -115,18 +103,41 @@ export const ERC20_ABI = [
 ];
 
 export const GOVERNOR_ABI = [
+  // Read
   'function name() view returns (string)',
   'function votingDelay() view returns (uint256)',
   'function votingPeriod() view returns (uint256)',
   'function proposalThreshold() view returns (uint256)',
+  'function quorumNumerator() view returns (uint256)',
+  'function QUORUM_DENOMINATOR() view returns (uint256)',
+  'function quorum(uint256 blockNumber) view returns (uint256)',
   'function state(uint256 proposalId) view returns (uint8)',
+  'function proposalVotes(uint256 proposalId) view returns (uint256 againstVotes, uint256 forVotes, uint256 abstainVotes)',
+  'function proposalSnapshot(uint256 proposalId) view returns (uint256)',
+  'function proposalDeadline(uint256 proposalId) view returns (uint256)',
+  'function proposalProposer(uint256 proposalId) view returns (address)',
+  'function hasVoted(uint256 proposalId, address account) view returns (bool)',
+  'function proposalsPaused() view returns (bool)',
+  'function safe() view returns (address)',
+  // Timing bounds
+  'function minVotingDelay() view returns (uint256)',
+  'function maxVotingDelay() view returns (uint256)',
+  'function minVotingPeriod() view returns (uint256)',
+  'function maxVotingPeriod() view returns (uint256)',
+  // Write — standard propose (uses default timing)
   'function propose(address[] targets, uint256[] values, bytes[] calldatas, string description) returns (uint256)',
+  // Write — custom timing propose
+  'function proposeWithTiming(address[] targets, uint256[] values, bytes[] calldatas, string description, uint256 customDelay, uint256 customPeriod) returns (uint256)',
+  // Write — voting
   'function castVote(uint256 proposalId, uint8 support) returns (uint256)',
   'function castVoteWithReason(uint256 proposalId, uint8 support, string reason) returns (uint256)',
+  // Write — execution
   'function queue(address[] targets, uint256[] values, bytes[] calldatas, bytes32 descriptionHash) returns (uint256)',
   'function execute(address[] targets, uint256[] values, bytes[] calldatas, bytes32 descriptionHash) returns (uint256)',
-  'function hasVoted(uint256 proposalId, address account) view returns (bool)',
-  'function proposalVotes(uint256 proposalId) view returns (uint256 againstVotes, uint256 forVotes, uint256 abstainVotes)',
+  // Events (for log parsing)
+  'event ProposalCreated(uint256 proposalId, address proposer, address[] targets, uint256[] values, string[] signatures, bytes[] calldatas, uint256 voteStart, uint256 voteEnd, string description)',
+  'event ProposalTimingSet(uint256 indexed proposalId, uint256 customDelay, uint256 customPeriod)',
+  'event VoteCast(address indexed voter, uint256 proposalId, uint8 support, uint256 weight, string reason)',
 ];
 
 export const REGISTRY_ABI = [
@@ -144,3 +155,38 @@ export const LIABILITY_RECEIPT_ABI = [
   'function tokenURI(uint256 tokenId) view returns (string)',
   'function locked(uint256 tokenId) view returns (bool)',
 ];
+
+// ── Proposal State Enum (matches Governor.sol) ──────────────────────
+
+export const PROPOSAL_STATES: Record<number, string> = {
+  0: 'Pending',
+  1: 'Active',
+  2: 'Canceled',
+  3: 'Defeated',
+  4: 'Succeeded',
+  5: 'Queued',
+  6: 'Expired',
+  7: 'Executed',
+};
+
+export const PROPOSAL_STATE_COLORS: Record<number, string> = {
+  0: 'bg-yellow-100 text-yellow-800',
+  1: 'bg-green-100 text-green-800',
+  2: 'bg-gray-100 text-gray-500',
+  3: 'bg-red-100 text-red-800',
+  4: 'bg-blue-100 text-blue-800',
+  5: 'bg-purple-100 text-purple-800',
+  6: 'bg-gray-100 text-gray-500',
+  7: 'bg-teal-100 text-teal-800',
+};
+
+// ── Block timing helpers (Base L2 ~2s/block) ────────────────────────
+
+export const BLOCKS_PER_HOUR = 1800;
+export const BLOCKS_PER_DAY = 43200;
+
+export function blocksToHumanTime(blocks: number): string {
+  if (blocks < BLOCKS_PER_HOUR) return `${Math.round(blocks / 30)} min`;
+  if (blocks < BLOCKS_PER_DAY) return `${(blocks / BLOCKS_PER_HOUR).toFixed(1)} hours`;
+  return `${(blocks / BLOCKS_PER_DAY).toFixed(1)} days`;
+}
