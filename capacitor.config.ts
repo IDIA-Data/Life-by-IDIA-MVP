@@ -41,6 +41,10 @@ const config: CapacitorConfig = {
       backgroundColor: "#1a1a2e",
     },
   },
+   android: {
+    // Preserve WebView data across updates
+    webContentsDebuggingEnabled: true,
+  }
 };
 
 export default config;
