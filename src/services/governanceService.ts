@@ -148,56 +148,61 @@ class GovernanceService {
 
   // ── Read: Proposals from events ───────────────────────────
 
+  // Block where the Governor was deployed — avoids scanning from genesis
+  // Update these after each Governor redeployment
+  private static readonly GOVERNOR_DEPLOY_BLOCK = ACTIVE_DEPLOYMENT === 'mainnet' ? 46303500 : 0;
+
+  // Base free RPC limits eth_getLogs to 10,000 blocks per call
+  private static readonly MAX_LOG_RANGE = 9999;
+
   async getRecentProposals(address: string, fromBlock?: number): Promise<ProposalOnChain[]> {
     const provider = this.getProvider();
     const gov = this.getGovernorReadOnly();
     const govInterface = new ethers.Interface(GOVERNOR_ABI);
 
     const currentBlock = await provider.getBlockNumber();
-    // Start with a 7-day window — Base free RPC often rejects 30-day scans
-    const startBlock = fromBlock || Math.max(0, currentBlock - (BLOCKS_PER_DAY * 7));
+    const startBlock = fromBlock || GovernanceService.GOVERNOR_DEPLOY_BLOCK;
 
-    console.log(`[GovernanceService] Scanning blocks ${startBlock} → ${currentBlock} for proposals on ${PROTOCOL.governor}`);
-
-    // Fetch ProposalCreated events
     const topic0 = ethers.id('ProposalCreated(uint256,address,address[],uint256[],string[],bytes[],uint256,uint256,string)');
-    console.log(`[GovernanceService] Topic0: ${topic0}`);
 
-    let logs: ethers.Log[] = [];
+    const totalBlocks = currentBlock - startBlock;
+    const chunks = Math.ceil(totalBlocks / GovernanceService.MAX_LOG_RANGE);
+    console.log(`[GovernanceService] Scanning ${totalBlocks} blocks in ${chunks} chunks (${startBlock} → ${currentBlock}) on ${PROTOCOL.governor}`);
 
-    // Try progressively smaller ranges if RPC rejects
-    const ranges = [
-      BLOCKS_PER_DAY * 7,   // 7 days
-      BLOCKS_PER_DAY * 3,   // 3 days
-      BLOCKS_PER_DAY,        // 1 day
-      BLOCKS_PER_DAY / 2,   // 12 hours
-    ];
+    // Scan in 10,000-block chunks
+    let allLogs: ethers.Log[] = [];
 
-    for (const range of ranges) {
-      const from = Math.max(0, currentBlock - range);
+    for (let i = 0; i < chunks; i++) {
+      const chunkFrom = startBlock + (i * GovernanceService.MAX_LOG_RANGE);
+      const chunkTo = Math.min(chunkFrom + GovernanceService.MAX_LOG_RANGE, currentBlock);
+
       try {
-        logs = await provider.getLogs({
+        const logs = await provider.getLogs({
           address: PROTOCOL.governor,
           topics: [topic0],
-          fromBlock: from,
-          toBlock: 'latest',
+          fromBlock: chunkFrom,
+          toBlock: chunkTo,
         });
-        console.log(`[GovernanceService] Found ${logs.length} ProposalCreated events (scanned ${range} blocks)`);
-        break; // Success — stop trying smaller ranges
+
+        if (logs.length > 0) {
+          console.log(`[GovernanceService] Chunk ${i + 1}/${chunks}: found ${logs.length} events (blocks ${chunkFrom}-${chunkTo})`);
+          allLogs = allLogs.concat(logs);
+        }
       } catch (e: any) {
-        console.warn(`[GovernanceService] getLogs failed for ${range} block range: ${e.message}`);
-        // Try next smaller range
+        console.warn(`[GovernanceService] Chunk ${i + 1}/${chunks} failed: ${e.message}`);
+        // Continue to next chunk — don't abort the whole scan
       }
     }
 
-    if (logs.length === 0) {
-      console.log('[GovernanceService] No proposal events found in any scan range');
+    console.log(`[GovernanceService] Total ProposalCreated events found: ${allLogs.length}`);
+
+    if (allLogs.length === 0) {
       return [];
     }
 
     const proposals: ProposalOnChain[] = [];
 
-    for (const log of logs) {
+    for (const log of allLogs) {
       try {
         const parsed = govInterface.parseLog({ topics: log.topics as string[], data: log.data });
         if (!parsed) continue;
