@@ -12,14 +12,12 @@ const Auth = () => {
   const [searchParams] = useSearchParams();
   const defaultIsLogin = searchParams.get("mode") !== "signup";
 
-  // Standard Auth States
   const [isLogin, setIsLogin] = useState(defaultIsLogin);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
-  // OTP Password Reset States
   const [isResetMode, setIsResetMode] = useState(false);
   const [resetStep, setResetStep] = useState<"request" | "verify">("request");
   const [resetEmail, setResetEmail] = useState("");
@@ -57,7 +55,7 @@ const Auth = () => {
   }, [navigate, searchParams, isResetMode, toast]);
 
   // ==========================================
-  // 1. STANDARD AUTH (LOGIN / SIGNUP / OAUTH)
+  // 1. EMAIL / PASSWORD AUTH
   // ==========================================
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -72,7 +70,6 @@ const Auth = () => {
         const { error } = await supabase.auth.signUp({
           email,
           password,
-          // Surgical Fix: Land on root after email confirmation
           options: { emailRedirectTo: `${window.location.origin}/` },
         });
         if (error) throw error;
@@ -85,41 +82,74 @@ const Auth = () => {
     }
   };
 
+  // ==========================================
+  // 2. GOOGLE / APPLE OAUTH
+  // ==========================================
   const handleOAuthSignIn = async (provider: "google" | "apple") => {
     setIsLoading(true);
     try {
-      // On native (Android/iOS), use the custom URL scheme registered in MainActivity.kt
-      // so OAuth redirects back into the app instead of opening localhost in a browser
       const { Capacitor } = await import("@capacitor/core");
       const isNative = Capacitor.isNativePlatform();
 
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider,
-        options: {
-          redirectTo: isNative
-            ? "idialife://auth-callback"
-            : `${window.location.origin}/`,
-        },
-      });
-      if (error) throw error;
+      if (isNative && provider === "google") {
+        // Native Google Sign-In — no browser, no redirects
+        const { GoogleAuth } = await import("@codetrix-studio/capacitor-google-auth");
+
+        // Initialize the plugin (required before first signIn call)
+        await GoogleAuth.initialize({
+          clientId: "349472255801-091p5a3320h0kb9636hjsd2otfs160ct.apps.googleusercontent.com",
+          scopes: ["profile", "email"],
+          grantOfflineAccess: false,
+        });
+
+        console.log("[AUTH] Native Google Sign-In starting...");
+        const googleUser = await GoogleAuth.signIn();
+        console.log("[AUTH] Google user received:", googleUser.email);
+
+        // Exchange the Google ID token for a Supabase session
+        const idToken = googleUser.authentication.idToken;
+        if (!idToken) throw new Error("No ID token received from Google");
+
+        console.log("[AUTH] Exchanging Google ID token with Supabase...");
+        const { error } = await supabase.auth.signInWithIdToken({
+          provider: "google",
+          token: idToken,
+        });
+        if (error) throw error;
+
+        console.log("[AUTH] Session created successfully");
+        // onAuthStateChange will handle navigation
+
+      } else {
+        // Web or Apple: standard OAuth redirect flow
+        const { error } = await supabase.auth.signInWithOAuth({
+          provider,
+          options: {
+            redirectTo: `${window.location.origin}/`,
+          },
+        });
+        if (error) throw error;
+      }
     } catch (error: any) {
-      toast({ title: `${provider} Sign In failed`, description: error.message, variant: "destructive" });
+      // User cancelled the sign-in — don't show error for that
+      if (error.message?.includes("canceled") || error.message?.includes("cancelled")) {
+        console.log("[AUTH] User cancelled sign-in");
+      } else {
+        console.error("[AUTH] Sign-in error:", error);
+        toast({ title: `${provider} Sign In failed`, description: error.message, variant: "destructive" });
+      }
       setIsLoading(false);
     }
   };
 
   // ==========================================
-  // 2. OTP PASSWORD RESET FLOW
+  // 3. OTP PASSWORD RESET FLOW
   // ==========================================
-
-  // Step 1: Request the 6-Digit Code
   const handleRequestOTP = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsResetLoading(true);
 
     try {
-      // DISCUSSION: Route through the God-Mode Edge Function instead of the client SDK.
-      // This forces the email to send even if the account is shadowed by Apple Sign-In.
       const { data, error } = await supabase.functions.invoke("reset-password", {
         body: { email: resetEmail },
       });
@@ -139,7 +169,6 @@ const Auth = () => {
     }
   };
 
-  // Step 2: Verify Code and Set New Password
   const handleVerifyAndReset = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsResetLoading(true);
@@ -167,7 +196,6 @@ const Auth = () => {
       setOtpCode("");
       setNewPassword("");
       setIsResetMode(false);
-      // Surgical Fix: Land on root after reset
       navigate("/");
     } catch (error: any) {
       toast({ title: "Reset failed", description: error.message, variant: "destructive" });

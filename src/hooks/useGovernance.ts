@@ -1,8 +1,8 @@
 /**
  * useGovernance — React hook for on-chain governance interactions.
  *
- * Provides proposal listing, voting, delegation, and proposal creation
- * all connected to the deployed IDIAGovernor contract.
+ * Loads all governance data sequentially with delays between groups
+ * to stay within Base free RPC rate limits.
  */
 
 import { useState, useEffect, useCallback } from 'react';
@@ -50,58 +50,93 @@ export function useGovernance(): UseGovernanceReturn {
 
   const address = walletService.getAddress();
 
-  // Fetch governance parameters
-  useEffect(() => {
-    (async () => {
-      try {
-        const [p, q] = await Promise.all([
-          governanceService.getGovernorParams(),
-          governanceService.getCurrentQuorum(),
-        ]);
-        setParams(p);
-        setCurrentQuorum(q);
-      } catch (e: any) {
-        console.warn('[useGovernance] Failed to load params:', e.message);
-      }
-    })();
-  }, []);
+  // Small delay helper
+  const delay = (ms: number) => new Promise(r => setTimeout(r, ms));
 
-  // Fetch proposals
-  const refreshProposals = useCallback(async () => {
-    if (!address) return;
+  // ── Load everything sequentially to avoid RPC rate limits ──
+
+  const loadAll = useCallback(async () => {
+    if (!address) {
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     setError(null);
+
+    // 1. Governor params (10 RPC calls in 2 batches of 5, with delay between)
     try {
-      const props = await governanceService.getRecentProposals(address);
-      setProposals(props);
+      const p = await governanceService.getGovernorParams();
+      setParams(p);
     } catch (e: any) {
-      console.error('[useGovernance] Failed to load proposals:', e.message);
-      setError(e.message);
-    } finally {
-      setLoading(false);
+      console.warn('[useGovernance] Failed to load params:', e.message);
     }
-  }, [address]);
 
-  useEffect(() => {
-    if (address) refreshProposals();
-  }, [address, refreshProposals]);
+    await delay(500);
 
-  // Fetch delegation
-  const refreshDelegation = useCallback(async () => {
-    if (!address) return;
+    // 2. Current quorum (2 RPC calls: getBlockNumber + quorum)
+    try {
+      const q = await governanceService.getCurrentQuorum();
+      setCurrentQuorum(q);
+    } catch (e: any) {
+      console.warn('[useGovernance] Failed to load quorum:', e.message);
+    }
+
+    await delay(500);
+
+    // 3. Delegation info (3 sequential RPC calls)
     try {
       const info = await governanceService.getDelegationInfo(address);
       setDelegation(info);
     } catch (e: any) {
       console.warn('[useGovernance] Failed to load delegation:', e.message);
     }
+
+    await delay(300);
+
+    // 4. Proposals from DB + hasVoted per proposal (1 DB query + N sequential RPC calls)
+    try {
+      const props = await governanceService.getRecentProposals(address);
+      setProposals(props);
+    } catch (e: any) {
+      console.error('[useGovernance] Failed to load proposals:', e.message);
+      setError(e.message);
+    }
+
+    setLoading(false);
   }, [address]);
 
+  // Initial load
   useEffect(() => {
-    if (address) refreshDelegation();
-  }, [address, refreshDelegation]);
+    loadAll();
+  }, [loadAll]);
 
-  // Cast vote
+  // ── Targeted refresh functions ────────────────────────────
+
+  const refreshProposals = useCallback(async () => {
+    if (!address) return;
+    setError(null);
+    try {
+      const props = await governanceService.getRecentProposals(address);
+      setProposals(props);
+    } catch (e: any) {
+      console.error('[useGovernance] Failed to refresh proposals:', e.message);
+      setError(e.message);
+    }
+  }, [address]);
+
+  const refreshDelegation = useCallback(async () => {
+    if (!address) return;
+    try {
+      const info = await governanceService.getDelegationInfo(address);
+      setDelegation(info);
+    } catch (e: any) {
+      console.warn('[useGovernance] Failed to refresh delegation:', e.message);
+    }
+  }, [address]);
+
+  // ── Actions ───────────────────────────────────────────────
+
   const castVote = useCallback(async (
     proposalId: string,
     support: 0 | 1 | 2,
@@ -113,6 +148,8 @@ export function useGovernance(): UseGovernanceReturn {
         title: 'Vote Cast',
         description: `${['Against', 'For', 'Abstain'][support]} vote recorded. TX: ${hash.slice(0, 10)}...`,
       });
+      // Wait a moment for the indexer to process, then refresh
+      await delay(2000);
       await refreshProposals();
       return true;
     } catch (e: any) {
@@ -125,7 +162,6 @@ export function useGovernance(): UseGovernanceReturn {
     }
   }, [refreshProposals]);
 
-  // Create proposal (default timing)
   const createProposal = useCallback(async (description: string): Promise<string | null> => {
     try {
       const { hash, proposalId } = await governanceService.propose(description);
@@ -133,6 +169,8 @@ export function useGovernance(): UseGovernanceReturn {
         title: 'Proposal Created',
         description: `ID: ${proposalId?.slice(0, 12)}... TX: ${hash.slice(0, 10)}...`,
       });
+      // Wait for indexer to pick it up
+      await delay(3000);
       await refreshProposals();
       return proposalId || null;
     } catch (e: any) {
@@ -145,7 +183,6 @@ export function useGovernance(): UseGovernanceReturn {
     }
   }, [refreshProposals]);
 
-  // Create proposal with custom timing
   const createProposalWithTiming = useCallback(async (
     description: string,
     delayBlocks: number,
@@ -159,6 +196,8 @@ export function useGovernance(): UseGovernanceReturn {
         title: 'Proposal Created',
         description: `Custom timing set. TX: ${hash.slice(0, 10)}...`,
       });
+      // Wait for indexer to pick it up
+      await delay(3000);
       await refreshProposals();
       return proposalId || null;
     } catch (e: any) {
@@ -171,11 +210,11 @@ export function useGovernance(): UseGovernanceReturn {
     }
   }, [refreshProposals]);
 
-  // Delegation actions
   const selfDelegate = useCallback(async (): Promise<boolean> => {
     try {
       await governanceService.selfDelegate();
       toast({ title: 'Delegated', description: 'Voting power activated (self-delegation).' });
+      await delay(1000);
       await refreshDelegation();
       return true;
     } catch (e: any) {
@@ -188,6 +227,7 @@ export function useGovernance(): UseGovernanceReturn {
     try {
       await governanceService.delegate(target);
       toast({ title: 'Delegated', description: `Voting power delegated to ${target.slice(0, 8)}...` });
+      await delay(1000);
       await refreshDelegation();
       return true;
     } catch (e: any) {
@@ -200,6 +240,7 @@ export function useGovernance(): UseGovernanceReturn {
     try {
       await governanceService.undelegate();
       toast({ title: 'Undelegated', description: 'Voting power deactivated.' });
+      await delay(1000);
       await refreshDelegation();
       return true;
     } catch (e: any) {

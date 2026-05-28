@@ -23,10 +23,10 @@ const config: CapacitorConfig = {
   server: {
     androidScheme: "https",
     allowNavigation: [
-      "*.coinbase.com",
-      "*.base.org",
-      "106c540d-44fd-41bf-9be1-771a4d91effc.lovableproject.com",
-    ],
+  "*.coinbase.com",
+  "*.base.org",
+  "106c540d-44fd-41bf-9be1-771a4d91effc.lovableproject.com",
+],
     ...(USE_LOVABLE
       ? {
           url: "https://106c540d-44fd-41bf-9be1-771a4d91effc.lovableproject.com?forceHideBadge=true",
@@ -35,12 +35,17 @@ const config: CapacitorConfig = {
       : {}),
   },
   plugins: {
-    SplashScreen: {
-      launchShowDuration: 2000,
-      launchAutoHide: true,
-      backgroundColor: "#1a1a2e",
-    },
+  SplashScreen: {
+    launchShowDuration: 2000,
+    launchAutoHide: true,
+    backgroundColor: "#1a1a2e",
   },
+  GoogleAuth: {
+    scopes: ["profile", "email"],
+    serverClientId: "349472255801-091p5a3320h0kb9636hjsd2otfs160ct.apps.googleusercontent.com",
+    forceCodeForRefreshToken: false,
+  },
+},
    android: {
     // Preserve WebView data across updates
     webContentsDebuggingEnabled: true,

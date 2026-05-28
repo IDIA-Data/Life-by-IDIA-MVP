@@ -1,13 +1,11 @@
 /**
- * Governance Service — On-chain Governor interaction layer.
- *
- * Reads proposal state from the IDIAGovernor contract and provides
- * write functions for proposing and voting. Write operations require
- * a connected signer from walletService.
+ * Governance Service — Reads proposals from Supabase (indexed by edge function),
+ * fetches live vote state from on-chain, and writes to the Governor contract.
  */
 
 import { ethers } from 'ethers';
 import { walletService, NETWORKS } from './walletService';
+import { supabase } from '../integrations/supabase/client';
 import {
   PROTOCOL,
   ACTIVE_DEPLOYMENT,
@@ -23,6 +21,7 @@ export interface ProposalOnChain {
   proposalId: string;
   proposer: string;
   description: string;
+  title: string;
   state: number;
   stateName: string;
   forVotes: string;
@@ -34,6 +33,8 @@ export interface ProposalOnChain {
   targets: string[];
   values: string[];
   calldatas: string[];
+  blockCreated: number;
+  txHash: string | null;
 }
 
 export interface GovernorParams {
@@ -53,10 +54,18 @@ export interface GovernorParams {
 
 class GovernanceService {
 
+  // Cache provider so all calls share one instance
+  private _provider: ethers.JsonRpcProvider | null = null;
+
   private getProvider(): ethers.JsonRpcProvider {
-    const networkKey = ACTIVE_DEPLOYMENT === 'mainnet' ? 'base' : 'baseSepolia';
-    const network = NETWORKS[networkKey];
-    return new ethers.JsonRpcProvider(network.rpcUrl, network.chainId);
+    if (!this._provider) {
+      const networkKey = ACTIVE_DEPLOYMENT === 'mainnet' ? 'base' : 'baseSepolia';
+      const network = NETWORKS[networkKey];
+      this._provider = new ethers.JsonRpcProvider(network.rpcUrl, network.chainId, {
+        batchMaxCount: 5,
+      });
+    }
+    return this._provider;
   }
 
   private getGovernorReadOnly(): ethers.Contract {
@@ -67,28 +76,37 @@ class GovernanceService {
     return new ethers.Contract(PROTOCOL.idiaToken, IDIA_TOKEN_ABI, this.getProvider());
   }
 
+  // Small delay to avoid RPC rate limits
+  private delay(ms: number): Promise<void> {
+    return new Promise(r => setTimeout(r, ms));
+  }
+
   // ── Read: Governor Parameters ─────────────────────────────
 
   async getGovernorParams(): Promise<GovernorParams> {
     const gov = this.getGovernorReadOnly();
-    const [
-      votingDelay, votingPeriod, proposalThreshold,
-      quorumNumerator, quorumDenominator,
-      minVotingDelay, maxVotingDelay,
-      minVotingPeriod, maxVotingPeriod,
-      isPaused,
-    ] = await Promise.all([
-      gov.votingDelay(),
-      gov.votingPeriod(),
-      gov.proposalThreshold(),
-      gov.quorumNumerator(),
-      gov['QUORUM_DENOMINATOR'](),
-      gov.minVotingDelay(),
-      gov.maxVotingDelay(),
-      gov.minVotingPeriod(),
-      gov.maxVotingPeriod(),
-      gov.proposalsPaused(),
-    ]);
+
+    // Batch 1: 5 calls
+    const [votingDelay, votingPeriod, proposalThreshold, quorumNumerator, quorumDenominator] =
+      await Promise.all([
+        gov.votingDelay(),
+        gov.votingPeriod(),
+        gov.proposalThreshold(),
+        gov.quorumNumerator(),
+        gov['QUORUM_DENOMINATOR'](),
+      ]);
+
+    await this.delay(300);
+
+    // Batch 2: 5 calls
+    const [minVotingDelay, maxVotingDelay, minVotingPeriod, maxVotingPeriod, isPaused] =
+      await Promise.all([
+        gov.minVotingDelay(),
+        gov.maxVotingDelay(),
+        gov.minVotingPeriod(),
+        gov.maxVotingPeriod(),
+        gov.proposalsPaused(),
+      ]);
 
     return {
       votingDelay: Number(votingDelay),
@@ -128,11 +146,11 @@ class GovernanceService {
     isSelfDelegated: boolean;
   }> {
     const token = this.getTokenReadOnly();
-    const [balance, votes, delegatee] = await Promise.all([
-      token.balanceOf(address),
-      token.getVotes(address),
-      token.delegates(address),
-    ]);
+
+    // Sequential calls to avoid rate limits
+    const balance = await token.balanceOf(address);
+    const votes = await token.getVotes(address);
+    const delegatee = await token.delegates(address);
 
     const isDelegated = delegatee !== ethers.ZeroAddress;
     const isSelfDelegated = delegatee.toLowerCase() === address.toLowerCase();
@@ -146,109 +164,76 @@ class GovernanceService {
     };
   }
 
-  // ── Read: Proposals from events ───────────────────────────
+  // ── Read: Proposals from Database ─────────────────────────
 
-  // Block where the Governor was deployed — avoids scanning from genesis
-  // Update these after each Governor redeployment
-  private static readonly GOVERNOR_DEPLOY_BLOCK = ACTIVE_DEPLOYMENT === 'mainnet' ? 46303500 : 0;
+  async getRecentProposals(address: string): Promise<ProposalOnChain[]> {
+    const network = ACTIVE_DEPLOYMENT === 'mainnet' ? 'mainnet' : 'testnet';
 
-  // Base free RPC limits eth_getLogs to 10,000 blocks per call
-  private static readonly MAX_LOG_RANGE = 9999;
+    console.log(`[GovernanceService] Fetching proposals from database (network: ${network})`);
 
-  async getRecentProposals(address: string, fromBlock?: number): Promise<ProposalOnChain[]> {
-    const provider = this.getProvider();
-    const gov = this.getGovernorReadOnly();
-    const govInterface = new ethers.Interface(GOVERNOR_ABI);
+    // Read from the governance_proposals table (populated by the indexer edge function)
+    const { data: dbProposals, error } = await supabase
+      .from('governance_proposals')
+      .select('*')
+      .eq('network', network)
+      .order('block_created', { ascending: false });
 
-    const currentBlock = await provider.getBlockNumber();
-    const startBlock = fromBlock || GovernanceService.GOVERNOR_DEPLOY_BLOCK;
-
-    const topic0 = ethers.id('ProposalCreated(uint256,address,address[],uint256[],string[],bytes[],uint256,uint256,string)');
-
-    const totalBlocks = currentBlock - startBlock;
-    const chunks = Math.ceil(totalBlocks / GovernanceService.MAX_LOG_RANGE);
-    console.log(`[GovernanceService] Scanning ${totalBlocks} blocks in ${chunks} chunks (${startBlock} → ${currentBlock}) on ${PROTOCOL.governor}`);
-
-    // Scan in 10,000-block chunks
-    let allLogs: ethers.Log[] = [];
-
-    for (let i = 0; i < chunks; i++) {
-      const chunkFrom = startBlock + (i * GovernanceService.MAX_LOG_RANGE);
-      const chunkTo = Math.min(chunkFrom + GovernanceService.MAX_LOG_RANGE, currentBlock);
-
-      try {
-        const logs = await provider.getLogs({
-          address: PROTOCOL.governor,
-          topics: [topic0],
-          fromBlock: chunkFrom,
-          toBlock: chunkTo,
-        });
-
-        if (logs.length > 0) {
-          console.log(`[GovernanceService] Chunk ${i + 1}/${chunks}: found ${logs.length} events (blocks ${chunkFrom}-${chunkTo})`);
-          allLogs = allLogs.concat(logs);
-        }
-      } catch (e: any) {
-        console.warn(`[GovernanceService] Chunk ${i + 1}/${chunks} failed: ${e.message}`);
-        // Continue to next chunk — don't abort the whole scan
-      }
-    }
-
-    console.log(`[GovernanceService] Total ProposalCreated events found: ${allLogs.length}`);
-
-    if (allLogs.length === 0) {
+    if (error) {
+      console.error('[GovernanceService] Database query failed:', error.message);
       return [];
     }
 
-    const proposals: ProposalOnChain[] = [];
-
-    for (const log of allLogs) {
-      try {
-        const parsed = govInterface.parseLog({ topics: log.topics as string[], data: log.data });
-        if (!parsed) continue;
-
-        const proposalId = parsed.args[0].toString();
-        const proposer = parsed.args[1];
-        const targets = parsed.args[2];
-        const values = parsed.args[3].map((v: bigint) => v.toString());
-        const calldatas = parsed.args[5];
-        const voteStart = Number(parsed.args[6]);
-        const voteEnd = Number(parsed.args[7]);
-        const description = parsed.args[8];
-
-        // Fetch current state and votes
-        const [state, votesResult, hasVoted] = await Promise.all([
-          gov.state(proposalId),
-          gov.proposalVotes(proposalId).catch(() => [0n, 0n, 0n]),
-          address ? gov.hasVoted(proposalId, address).catch(() => false) : false,
-        ]);
-
-        proposals.push({
-          proposalId,
-          proposer,
-          description,
-          state: Number(state),
-          stateName: PROPOSAL_STATES[Number(state)] || 'Unknown',
-          againstVotes: ethers.formatEther(votesResult[0]),
-          forVotes: ethers.formatEther(votesResult[1]),
-          abstainVotes: ethers.formatEther(votesResult[2]),
-          voteStart,
-          voteEnd,
-          hasVoted,
-          targets,
-          values,
-          calldatas,
-        });
-      } catch (e) {
-        console.warn('[GovernanceService] Failed to parse proposal event:', e);
-      }
+    if (!dbProposals || dbProposals.length === 0) {
+      console.log('[GovernanceService] No proposals in database');
+      return [];
     }
 
-    // Most recent first
-    return proposals.reverse();
+    console.log(`[GovernanceService] Found ${dbProposals.length} proposals in database`);
+
+    // For each proposal, check if the current user has voted (live from chain)
+    // Do this sequentially to avoid rate limits
+    const gov = this.getGovernorReadOnly();
+    const proposals: ProposalOnChain[] = [];
+
+    for (const row of dbProposals) {
+      let hasVoted = false;
+      if (address) {
+        try {
+          hasVoted = await gov.hasVoted(row.proposal_id, address);
+          // Small delay between hasVoted calls to avoid rate limits
+          if (dbProposals.length > 3) {
+            await this.delay(200);
+          }
+        } catch {
+          // If hasVoted call fails, assume not voted
+        }
+      }
+
+      proposals.push({
+        proposalId: row.proposal_id,
+        proposer: row.proposer,
+        description: row.description,
+        title: row.title || row.description.split('\n')[0].replace(/^#\s*/, '').slice(0, 120),
+        state: row.state,
+        stateName: row.state_name || PROPOSAL_STATES[row.state] || 'Unknown',
+        forVotes: row.for_votes || '0',
+        againstVotes: row.against_votes || '0',
+        abstainVotes: row.abstain_votes || '0',
+        voteStart: row.vote_start,
+        voteEnd: row.vote_end,
+        hasVoted,
+        targets: row.targets || [],
+        values: row.callvalues || [],
+        calldatas: row.calldatas || [],
+        blockCreated: row.block_created,
+        txHash: row.tx_hash,
+      });
+    }
+
+    return proposals;
   }
 
-  // ── Read: Single proposal state ───────────────────────────
+  // ── Read: Single proposal state (live from chain) ─────────
 
   async getProposalState(proposalId: string): Promise<{
     state: number;
@@ -258,10 +243,10 @@ class GovernanceService {
     abstainVotes: string;
   }> {
     const gov = this.getGovernorReadOnly();
-    const [state, votes] = await Promise.all([
-      gov.state(proposalId),
-      gov.proposalVotes(proposalId),
-    ]);
+
+    const state = await gov.state(proposalId);
+    await this.delay(200);
+    const votes = await gov.proposalVotes(proposalId);
 
     return {
       state: Number(state),
@@ -291,9 +276,10 @@ class GovernanceService {
       description,
     );
     const receipt = await tx.wait();
-
-    // Extract proposalId from ProposalCreated event
     const proposalId = this.extractProposalIdFromReceipt(receipt);
+
+    // Trigger the indexer to pick up the new proposal immediately
+    this.triggerIndexer().catch(() => {});
 
     return { hash: tx.hash, proposalId };
   }
@@ -323,6 +309,9 @@ class GovernanceService {
     const receipt = await tx.wait();
     const proposalId = this.extractProposalIdFromReceipt(receipt);
 
+    // Trigger the indexer to pick up the new proposal immediately
+    this.triggerIndexer().catch(() => {});
+
     return { hash: tx.hash, proposalId };
   }
 
@@ -343,6 +332,10 @@ class GovernanceService {
       : await gov.castVote(proposalId, support);
 
     await tx.wait();
+
+    // Trigger the indexer to update vote tallies
+    this.triggerIndexer().catch(() => {});
+
     return { hash: tx.hash };
   }
 
@@ -383,6 +376,22 @@ class GovernanceService {
       }
     } catch { /* parse failed */ }
     return undefined;
+  }
+
+  /**
+   * Trigger the governance-indexer edge function to run immediately.
+   * Used after creating a proposal or casting a vote so the DB
+   * reflects the new state without waiting for the next cron run.
+   */
+  private async triggerIndexer(): Promise<void> {
+    try {
+      await supabase.functions.invoke('governance-indexer', {
+        body: {},
+      });
+      console.log('[GovernanceService] Indexer triggered');
+    } catch (e: any) {
+      console.warn('[GovernanceService] Failed to trigger indexer:', e.message);
+    }
   }
 }
 
