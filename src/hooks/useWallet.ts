@@ -1,31 +1,93 @@
+/**
+ * React hook for IDIA Life wallet — exposes ETH, IDIA, and USDC balances
+ * along with wallet lifecycle, network switching, and governance delegation.
+ */
+
 import { useState, useEffect, useCallback } from 'react';
 import {
   walletService,
   NETWORKS,
-  type WalletInfo,
-  type BalanceInfo,
-  type TxRequest,
-  type TxResult,
-  type NetworkConfig,
-} from '@/services/walletService';
+  TxRequest,
+  TxResult,
+  WalletInfo,
+  WalletBalances,
+  NetworkConfig,
+  type ProvisioningStage,
+} from '../services/walletService';
 
-export function useWallet() {
+// --- Backwards Compatibility Aliases ---
+// We alias the new types to the old names so the rest of your app doesn't break
+export type TransactionResult = TxResult;
+export type BalanceInfo = any; 
+
+interface UseWalletReturn {
+  // --- NEW STATE API ---
+  wallet: WalletInfo | null;
+  hasWallet: boolean;
+  balances: WalletBalances | null;
+  votingPower: string | null;
+  delegatee: string | null;
+  loading: boolean;
+  balancesLoading: boolean;
+  error: string | null;
+  clearError: () => void;
+  provisioningStage: ProvisioningStage;
+
+  // --- NETWORK API ---
+  activeNetwork: string; // Legacy string format
+  activeNetworkConfig: NetworkConfig | null; // New config object format
+  activeNetworkKey: string;
+  networks: typeof NETWORKS;
+  availableNetworks: Array<{ key: string; config: NetworkConfig }>;
+  switchNetwork: (key: string) => Promise<void>;
+
+  // --- LIFECYCLE API ---
+  createWallet: () => Promise<{ address: string; mnemonic: string } | null>;
+  importWallet: (mnemonic: string) => Promise<{ address: string } | null>;
+  deleteWallet: () => Promise<void>;
+  getSeedPhrase: () => Promise<string | null>;
+
+  // --- BALANCES & TRANSACTIONS API ---
+  balance: BalanceInfo | null;
+  isBalanceLoading: boolean;
+  refreshBalance: () => Promise<void>;
+  refreshBalances: () => Promise<void>;
+  
+  estimateTransaction: (tx: any) => Promise<string>;
+  sendTransaction: (tx: TxRequest) => Promise<TransactionResult>;
+  sendNative: (to: string, amount: string) => Promise<TransactionResult>;
+  sendIDIA: (to: string, amount: string) => Promise<TransactionResult>;
+  delegateVotes: (delegatee?: string) => Promise<TransactionResult>;
+}
+
+export function useWallet(): UseWalletReturn {
   const [wallet, setWallet] = useState<WalletInfo | null>(null);
-  const [hasWallet, setHasWallet] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
+  const [hasWallet, setHasWallet] = useState<boolean>(false); // Restored legacy state
+  const [balances, setBalances] = useState<WalletBalances | null>(null);
+  const [votingPower, setVotingPower] = useState<string | null>(null);
+  const [delegatee, setDelegatee] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [balancesLoading, setBalancesLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [provisioningStage, setProvisioningStage] = useState<ProvisioningStage>('idle');
 
   const [balance, setBalance] = useState<BalanceInfo | null>(null);
   const [isBalanceLoading, setIsBalanceLoading] = useState(false);
 
   const [activeNetwork, setActiveNetwork] = useState<string>(walletService.getActiveNetworkKey());
 
+  const clearError = useCallback(() => setError(null), []);
+
+  // Legacy refresh balance mapping
   const refreshBalance = useCallback(async () => {
     if (!walletService.getAddress()) return;
     setIsBalanceLoading(true);
     try {
-      const b = await walletService.getBalance();
-      setBalance(b);
+      // Maps the old getBalance requirement to the new getAllBalances method
+      const b = await walletService.getAllBalances();
+      setBalance(b as any);
+    } catch (e: any) {
+      console.error('Legacy Balance fetch failed:', e);
     } finally {
       setIsBalanceLoading(false);
     }
@@ -42,94 +104,203 @@ export function useWallet() {
           setWallet(info);
           if (info) setActiveNetwork(info.activeNetwork);
         }
-      } catch (e: any) { setError(e.message); }
-      finally { setIsLoading(false); }
+      } catch (e: any) { 
+        setError(e.message); 
+      } finally { 
+        setLoading(false); 
+      }
     })();
   }, []);
 
-  // Refresh balance when wallet or network changes
+  // Fetch balances when wallet is loaded
+  const refreshBalances = useCallback(async () => {
+    if (!wallet) return;
+    setBalancesLoading(true);
+    setError(null);
+
+    try {
+      const [allBalances, power, delegate] = await Promise.all([
+        walletService.getAllBalances(),
+        walletService.getVotingPower().catch(() => '0'),
+        walletService.getDelegatee().catch(() => '0x0000000000000000000000000000000000000000'),
+      ]);
+      setBalances(allBalances);
+      setVotingPower(power);
+      setDelegatee(delegate);
+      
+      // Keep legacy state synced
+      setBalance(allBalances as any);
+    } catch (e: any) {
+      console.error('Balance fetch failed:', e);
+      setError(e.message);
+    } finally {
+      setBalancesLoading(false);
+    }
+  }, [wallet]);
+
   useEffect(() => {
-    if (wallet) refreshBalance();
-  }, [wallet, activeNetwork, refreshBalance]);
+    if (wallet) refreshBalances();
+  }, [wallet, refreshBalances]);
+
+  // Auto-refresh balances every 30 seconds
+  useEffect(() => {
+    if (!wallet) return;
+    const interval = setInterval(refreshBalances, 30_000);
+    return () => clearInterval(interval);
+  }, [wallet, refreshBalances]);
 
   const createWallet = useCallback(async () => {
-    setIsLoading(true); setError(null);
+    setLoading(true);
+    setError(null);
+    setProvisioningStage('idle');
     try {
       const r = await walletService.createWallet();
       setWallet({ address: r.address, activeNetwork: walletService.getActiveNetworkKey() });
       setHasWallet(true);
       setActiveNetwork(walletService.getActiveNetworkKey());
-      return r;
-    } catch (e: any) { setError(e.message); return null; }
-    finally { setIsLoading(false); }
+
+      // Fire-and-forget Drip + Approve + Self-Delegate sequence on Base.
+      // We do NOT block the createWallet return — the modal can show the seed
+      // phrase while provisioning runs in the background.
+      walletService
+        .provisionNewWallet((stage) => setProvisioningStage(stage))
+        .catch((e) => {
+          console.error('[useWallet] provisionNewWallet failed:', e);
+        });
+
+      return { address: r.address, mnemonic: r.mnemonic || '' };
+    } catch (e: any) {
+      setError(e.message);
+      return null;
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   const importWallet = useCallback(async (mnemonic: string) => {
-    setIsLoading(true); setError(null);
+    setLoading(true); 
+    setError(null);
     try {
       const r = await walletService.importWallet(mnemonic);
       setWallet({ address: r.address, activeNetwork: walletService.getActiveNetworkKey() });
       setHasWallet(true);
       setActiveNetwork(walletService.getActiveNetworkKey());
-      return true;
-    } catch (e: any) { setError(e.message); return false; }
-    finally { setIsLoading(false); }
+
+      return { address: r.address };
+    } catch (e: any) { 
+      setError(e.message); 
+      return null; 
+    } finally { 
+      setLoading(false); 
+    }
   }, []);
 
-  const getSeedPhrase = useCallback(async () => walletService.getSeedPhrase(), []);
+  const getSeedPhrase = useCallback(async () => {
+    return await walletService.getSeedPhrase();
+  }, []);
 
   const deleteWallet = useCallback(async () => {
     await walletService.deleteWallet();
     setWallet(null);
     setHasWallet(false);
+    setBalances(null);
     setBalance(null);
+    setVotingPower(null);
+    setDelegatee(null);
   }, []);
 
   const switchNetwork = useCallback(async (networkKey: string) => {
     setError(null);
     try {
-      const net = await walletService.switchNetwork(networkKey);
+      await walletService.switchNetwork(networkKey);
       setActiveNetwork(networkKey);
-      setBalance(null);
-      return net;
-    } catch (e: any) { setError(e.message); return null; }
+      const info = await walletService.loadWallet();
+      setWallet(info);
+      refreshBalances();
+    } catch (e: any) { 
+      setError(e.message); 
+    }
+  }, [refreshBalances]);
+
+  // Restored estimateTransaction for legacy components
+  const estimateTransaction = useCallback(async (tx: any) => {
+    try {
+      if (typeof (walletService as any).estimateTransaction === 'function') {
+        return await (walletService as any).estimateTransaction(tx);
+      }
+      return "0";
+    } catch (e) {
+      return "0";
+    }
   }, []);
 
-  const estimateTransaction = useCallback(async (req: TxRequest) => walletService.estimateTransaction(req), []);
+  const sendTransaction = useCallback(async (tx: TxRequest) => {
+    const result = await walletService.sendTransaction(tx);
+    refreshBalances();
+    return result;
+  }, [refreshBalances]);
 
-  const sendTransaction = useCallback(async (req: TxRequest): Promise<TxResult | null> => {
-    setError(null);
-    try {
-      const result = await walletService.sendTransaction(req);
-      setTimeout(refreshBalance, 1500);
-      return result;
-    } catch (e: any) {
-      setError(e.message);
-      return null;
-    }
-  }, [refreshBalance]);
+  const sendNative = useCallback(async (to: string, amount: string) => {
+    const result = await walletService.sendNative(to, amount);
+    refreshBalances();
+    return result;
+  }, [refreshBalances]);
+
+  const sendIDIA = useCallback(async (to: string, amount: string) => {
+    const result = await walletService.sendIDIA(to, amount);
+    refreshBalances();
+    return result;
+  }, [refreshBalances]);
+
+  const delegateVotes = useCallback(async (target?: string) => {
+    const result = await walletService.delegateVotes(target);
+    const [power, delegate] = await Promise.all([
+      walletService.getVotingPower(),
+      walletService.getDelegatee(),
+    ]);
+    setVotingPower(power);
+    setDelegatee(delegate);
+    return result;
+  }, []);
 
   return {
+    // --- Unified Return Object ---
     wallet,
     hasWallet,
-    isLoading,
+    balances,
+    votingPower,
+    delegatee,
+    loading,
+    balancesLoading,
     error,
+    clearError,
+    provisioningStage,
+
+    // Network data
+    activeNetwork,
+    activeNetworkConfig: NETWORKS[activeNetwork] as NetworkConfig,
+    activeNetworkKey: walletService.getActiveNetworkKey(),
+    networks: NETWORKS,
+    availableNetworks: walletService.getAvailableNetworks(),
+    switchNetwork,
+
+    // Lifecycle
     createWallet,
     importWallet,
-    getSeedPhrase,
     deleteWallet,
-    clearError: useCallback(() => setError(null), []),
-    // network
-    activeNetwork,
-    networks: NETWORKS,
-    switchNetwork,
-    activeNetworkConfig: NETWORKS[activeNetwork] as NetworkConfig,
-    // balance
+    getSeedPhrase,
+
+    // Balances
     balance,
     isBalanceLoading,
     refreshBalance,
-    // transactions
+    refreshBalances,
+
+    // Transactions
     estimateTransaction,
     sendTransaction,
+    sendNative,
+    sendIDIA,
+    delegateVotes,
   };
 }

@@ -103,16 +103,38 @@ const LifeScreen: React.FC = () => {
 
   useEffect(() => {
     console.log("[LIFE_NFC_SUBSCRIBE_START]");
-    const onComplete = (e: Event) => {
-      const detail = (e as CustomEvent<{ peerToken: string }>).detail;
+    const onComplete = async (e: Event) => {
+      const detail = (e as CustomEvent<{ peerToken: string; raw?: unknown }>).detail;
       const peerColor = peerColorFromToken(detail?.peerToken ?? "");
       console.log("[LIFE_NFC_HANDSHAKE_RESOLVED]", { peerColor });
       setWashPeerColor(peerColor);
-      toast.success("Sync complete", { description: "You made a new Connection." });
-      // After the color wash, prompt the user to rate the Sync
-      setTimeout(() => setRateTarget(detail?.peerToken ?? ""), 3600);
-      // Then prompt the user to label this Connection on-device only
-      setTimeout(() => promptLabelForLatestSync(), 4200);
+
+      try {
+        console.log("[LIFE_NFC_RESOLVE_INVOKE_START]");
+        const { data, error } = await supabase.functions.invoke("nfc-handshake-resolve", {
+          body: { peerPayload: detail?.raw ?? detail?.peerToken },
+        });
+        if (error || !data?.friendshipId) {
+          console.error("[LIFE_NFC_RESOLVE_FAIL]", error?.message ?? data);
+          toast("The Sync did not complete", {
+            description: error?.message ?? "Could not register the Connection.",
+          });
+          return;
+        }
+        console.log("[LIFE_NFC_RESOLVE_OK]", data);
+        toast.success("Sync complete", {
+          description: data.created ? "You made a new Connection." : "Connection refreshed.",
+        });
+        await reload();
+        // Target the new friendship row for rate + label sheets
+        setTimeout(() => setRateTarget(data.friendshipId), 3600);
+        setTimeout(() => setLabelTarget(data.friendshipId), 4200);
+      } catch (err: any) {
+        console.error("[LIFE_NFC_RESOLVE_CRASH]", err?.message ?? String(err));
+        toast("The Sync did not complete", {
+          description: "Network error registering the Connection. Try again.",
+        });
+      }
     };
     const onError = () => {
       toast("The Sync did not complete", {
@@ -126,7 +148,7 @@ const LifeScreen: React.FC = () => {
       window.removeEventListener("nfc:scan-error", onError);
       console.log("[LIFE_NFC_SUBSCRIBE_END]");
     };
-  }, []);
+  }, [reload]);
 
   // Granular layout calibration logging
   useLayoutEffect(() => {

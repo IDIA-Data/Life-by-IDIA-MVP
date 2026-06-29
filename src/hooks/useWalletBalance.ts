@@ -1,13 +1,34 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { ethers } from "ethers"; // <-- Swapped viem for ethers (Native Infrastructure)
+import { PROTOCOL } from "@/config/contracts";
+import { stage } from "@/lib/stageLogger";
 
-// Base Mainnet USDC Contract
-const USDC_ADDRESS = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
+// Base Mainnet contracts — sourced from the single PROTOCOL config so
+// any future address change flows from one place. No hardcoded strings.
+const USDC_ADDRESS = PROTOCOL.usdc;
+const IDIA_ADDRESS = PROTOCOL.idiaToken;
+
+const resolveBaseRpc = (): string => {
+  const raw = (import.meta as any).env?.VITE_ALCHEMY_RPC_URL;
+  try {
+    if (typeof raw === "string" && /^https:\/\/\S+$/.test(raw.trim())) {
+      return raw.trim();
+    }
+    console.error("[RPC_CONFIG] VITE_ALCHEMY_RPC_URL invalid or missing — falling back to public Base RPC.");
+  } catch (e) {
+    console.error("[RPC_CONFIG] RPC URL resolution failed:", e);
+  }
+  return "https://mainnet.base.org";
+};
+const BASE_RPC_URL = resolveBaseRpc();
+const BASE_NETWORK = ethers.Network.from(8453);
 
 // Minimal Human-Readable ABI for read-only operations via ethers
-const USDC_ABI = [
-  "function balanceOf(address account) view returns (uint256)"
+const ERC20_BALANCE_ABI = ["function balanceOf(address account) view returns (uint256)"];
+const GOVERNANCE_READ_ABI = [
+  "function getVotes(address account) view returns (uint256)",
+  "function delegates(address account) view returns (address)",
 ];
 
 export interface WalletBalance {
@@ -15,6 +36,9 @@ export interface WalletBalance {
   cash_balance: number;
   idia_token_balance: number;
   total_earned: number;
+  eth_balance: number;
+  voting_power: number;
+  delegatee: string | null;
 }
 
 const ZERO_FLOOR: WalletBalance = {
@@ -22,6 +46,9 @@ const ZERO_FLOOR: WalletBalance = {
   usdc_balance: 0,
   idia_token_balance: 0,
   total_earned: 0,
+  eth_balance: 0,
+  voting_power: 0,
+  delegatee: null,
 };
 
 // Purge any legacy persisted wallet state (no-persistence rule)
@@ -62,6 +89,7 @@ export const useWalletBalance = () => {
 
       console.info(`⚙️ [DATA_APPLY_LOG] PAYLOAD:`, row);
       setBalance((prev) => ({
+        ...prev,
         cash_balance: Number(row.cash_balance) || 0,
         usdc_balance: prev.usdc_balance, // Isolate USDC to ethers fetching only
         idia_token_balance: Number(row.idia_token_balance) || 0,
@@ -127,6 +155,9 @@ export const useWalletBalance = () => {
       // 2. Fetch Global Vault Identity from Profiles
       console.log("🌐 [FETCH_BALANCE_LOG] ACTION: Querying profiles for global wallet_address.");
       let usdcBalance = 0;
+      let ethBalance = 0;
+      let votingPower = 0;
+      let delegatee: string | null = null;
 
       const { data: profile, error: profileError } = await supabase
         .from("profiles")
@@ -135,9 +166,7 @@ export const useWalletBalance = () => {
         .maybeSingle();
 
       if (profileError) {
-        console.error("🚨 [FETCH_BALANCE_LOG] ERROR_START: Failed to query profile for wallet_address.");
         console.error("🚨 [FETCH_BALANCE_LOG] ERROR_DETAILS:", profileError.message);
-        console.error("🚨 [FETCH_BALANCE_LOG] ERROR_END: Profile query terminated.");
       }
 
       const walletAddress = profile?.wallet_address;
@@ -146,33 +175,55 @@ export const useWalletBalance = () => {
         console.log(`🌐 [FETCH_BALANCE_LOG] SUCCESS: Wallet identified: ${walletAddress}`);
         setUsdcProvisioned(true);
         setUsdcAddress(walletAddress);
-        console.log("🌐 [FETCH_BALANCE_LOG] ACTION: Initializing ethers JSON RPC provider for USDC hydration.");
 
+        const sRpc = stage("WALLET_BALANCE", "RPC_HYDRATE");
+        sRpc.start({ wallet: walletAddress, idia: IDIA_ADDRESS, usdc: USDC_ADDRESS });
         try {
-          // Replaced Viem with Ethers natively
-          const provider = new ethers.JsonRpcProvider("https://mainnet.base.org");
-          const usdcContract = new ethers.Contract(USDC_ADDRESS, USDC_ABI, provider);
+          const provider = new ethers.JsonRpcProvider(BASE_RPC_URL, BASE_NETWORK, { staticNetwork: BASE_NETWORK });
+          const usdcContract = new ethers.Contract(USDC_ADDRESS, ERC20_BALANCE_ABI, provider);
+          const idiaErc20 = new ethers.Contract(IDIA_ADDRESS, ERC20_BALANCE_ABI, provider);
+          const idiaGov = new ethers.Contract(IDIA_ADDRESS, GOVERNANCE_READ_ABI, provider);
 
-          const rawBalance = await usdcContract.balanceOf(walletAddress);
-          usdcBalance = Number(ethers.formatUnits(rawBalance, 6));
+          // Sequential to avoid 429 rate-limits on free/standard RPC tiers.
+          const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
+          const rawUsdc = await usdcContract.balanceOf(walletAddress).catch(() => 0n);
+          await delay(400);
+          const rawIdia = await idiaErc20.balanceOf(walletAddress).catch(() => 0n);
+          await delay(400);
+          const rawEth = await provider.getBalance(walletAddress).catch(() => 0n);
+          await delay(400);
+          const rawVotes = await idiaGov.getVotes(walletAddress).catch(() => 0n);
+          await delay(400);
+          const rawDelegatee = await idiaGov.delegates(walletAddress).catch(() => null);
 
-          console.log(`🌐 [FETCH_BALANCE_LOG] SUCCESS: Verified absolute on-chain USDC truth: $${usdcBalance}`);
+          usdcBalance = Number(ethers.formatUnits(rawUsdc, 6));
+          tokenBalance = Number(ethers.formatEther(rawIdia));
+          ethBalance = Number(ethers.formatEther(rawEth));
+          votingPower = Number(ethers.formatEther(rawVotes));
+          delegatee = rawDelegatee && typeof rawDelegatee === "string" ? rawDelegatee : null;
+
+          console.log(
+            `🌐 [FETCH_BALANCE_LOG] SUCCESS: USDC=$${usdcBalance} · IDIA=${tokenBalance} · ETH=${ethBalance} · Votes=${votingPower} · Delegatee=${delegatee}`,
+          );
+          sRpc.ok({ usdc: usdcBalance, idia: tokenBalance, eth: ethBalance, votes: votingPower });
         } catch (chainErr: any) {
-          console.error("🚨 [FETCH_BALANCE_LOG] ERROR_START: Ethers smart contract read failed.");
+          sRpc.fail(chainErr);
           console.error("🚨 [FETCH_BALANCE_LOG] ERROR_DETAILS:", chainErr.message || String(chainErr));
-          console.error("🚨 [FETCH_BALANCE_LOG] ERROR_END: Ethers reading terminated.");
         }
       } else {
-        console.log("🌐 [FETCH_BALANCE_LOG] INFO: No valid sovereign wallet mapped in profiles. Bypassing ethers fetch.");
+        console.log("🌐 [FETCH_BALANCE_LOG] INFO: No sovereign wallet mapped. Bypassing chain fetch.");
         setUsdcProvisioned(false);
         setUsdcAddress(null);
       }
 
       setBalance({
         cash_balance: fiatBalance,
-        usdc_balance: usdcBalance, // Overrides db column with strict on-chain data
+        usdc_balance: usdcBalance,
         idia_token_balance: tokenBalance,
         total_earned: 0,
+        eth_balance: ethBalance,
+        voting_power: votingPower,
+        delegatee,
       });
 
       console.log("🌐 [FETCH_BALANCE_LOG] END: Wallet fetch routine completed successfully.");
@@ -244,13 +295,15 @@ export const useWalletBalance = () => {
       }
     };
 
-    setup();
+    // FIX: Catch the floating setup promise to stop white-screen unhandled rejections
+    setup().catch((e) => console.error("🚨 [SETUP_PROMISE_FAULT]:", e));
 
-    // Auto-poll the blockchain every 15 seconds parallel to Hub's design
+    // Auto-poll the blockchain once per hour (Alchemy update cadence)
     const interval = setInterval(() => {
-      console.log("🔄 [REALTIME_SYNC_LOG] INFO: 15-second polling tick fired for ethers fetch.");
-      fetchBalance();
-    }, 15000);
+      console.log("🔄 [REALTIME_SYNC_LOG] INFO: 60-minute polling tick fired for ethers fetch.");
+      // FIX: Catch the polling loop to prevent silent application crashes
+      fetchBalance().catch((e) => console.error("🚨 [POLL_PROMISE_FAULT]:", e));
+    }, 3600000);
 
     // React to auth changes — purge state on sign-out, refetch on sign-in
     console.log("🔐 [AUTH_STATE_LOG] START: Attaching AuthState listener.");
@@ -261,10 +314,13 @@ export const useWalletBalance = () => {
           console.log("🔐 [AUTH_STATE_LOG] ACTION: Purging context and channels due to sign out.");
           purgeLegacyWalletCache();
           setBalance(ZERO_FLOOR);
-          if (channel) supabase.removeChannel(channel);
+          if (channel) {
+            // FIX: Prevent unhandled rejections during channel termination
+            supabase.removeChannel(channel).catch((e) => console.error("🚨 [CHANNEL_CLEANUP_FAULT]:", e));
+          }
         } else if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") {
           console.log("🔐 [AUTH_STATE_LOG] ACTION: Firing fetchBalance due to valid session.");
-          fetchBalance();
+          fetchBalance().catch((e) => console.error("🚨 [AUTH_FETCH_FAULT]:", e));
         }
         console.log("🔐 [AUTH_STATE_LOG] END: Auth event handled successfully.");
       } catch (error) {
@@ -280,9 +336,11 @@ export const useWalletBalance = () => {
       clearInterval(interval);
       if (channel) {
         console.log("🧹 [HOOK_CLEANUP_LOG] ACTION: Removing Supabase realtime channel.");
-        supabase.removeChannel(channel);
+        supabase.removeChannel(channel).catch((e) => console.error("🚨 [UNMOUNT_CHANNEL_FAULT]:", e));
       }
-      authSub.subscription.unsubscribe();
+      if (authSub?.subscription) {
+        authSub.subscription.unsubscribe();
+      }
       console.log("🧹 [HOOK_CLEANUP_LOG] END: Unmount operations completed.");
     };
   }, [fetchBalance, applyRow]);

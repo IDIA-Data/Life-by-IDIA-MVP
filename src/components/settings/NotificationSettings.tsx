@@ -1,26 +1,68 @@
+import { useState } from 'react';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Smartphone, Mail, Moon, BellRing, ShieldAlert } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Smartphone, Mail, Moon, BellRing, ShieldAlert, Plus, Trash2, Check } from 'lucide-react';
 import { useProfile } from '@/hooks/useProfile';
+import { useToast } from '@/hooks/use-toast';
+import { useFocusModes } from '@/hooks/useFocusModes';
+import { usePushNotifications } from '@/hooks/usePushNotifications';
+import { isPayReady } from '@/config/release';
+
+const HOURS = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart(2, '0')}:00`);
 
 export function NotificationSettings() {
   const { preferences, updatePreferences } = useProfile();
+  const { toast } = useToast();
+  const payReady = isPayReady();
 
-  // Helper to safely update boolean preferences
-  const handleToggle = (key: string, value: boolean) => {
-    updatePreferences({ [key]: value });
+  const { modes, create: createFocus, activate: activateFocus, deactivateAll, remove: removeFocus } = useFocusModes();
+  const { enable: enablePush, disable: disablePush } = usePushNotifications();
+
+  const [newLabel, setNewLabel] = useState('');
+  const [newStart, setNewStart] = useState('22:00');
+  const [newEnd, setNewEnd] = useState('08:00');
+
+  const handlePreferenceUpdate = async (key: string, value: boolean | string) => {
+    try {
+      await updatePreferences({ [key]: value });
+    } catch (error) {
+      toast({ title: 'Update Failed', description: `Could not save preference: ${key}`, variant: 'destructive' });
+    }
   };
 
-  // Helper to safely update string preferences (like times)
-  const handleSelect = (key: string, value: string) => {
-    updatePreferences({ [key]: value });
+  const handlePushToggle = async (v: boolean) => {
+    if (v) {
+      const ok = await enablePush();
+      if (!ok) return; // permission denied — leave preference off
+      await handlePreferenceUpdate('push_notifications', true);
+    } else {
+      await disablePush();
+      await handlePreferenceUpdate('push_notifications', false);
+    }
+  };
+
+  const handleFocusToggle = async (v: boolean) => {
+    await handlePreferenceUpdate('quiet_hours_enabled', v);
+    if (!v) await deactivateAll();
+  };
+
+  const handleCreateFocus = async () => {
+    if (!newLabel.trim()) {
+      toast({ title: 'Label required', variant: 'destructive' });
+      return;
+    }
+    await createFocus(newLabel.trim(), newStart, newEnd);
+    setNewLabel('');
+    toast({ title: 'Focus profile saved' });
   };
 
   return (
     <div className="space-y-6">
-      
-      {/* 1. In-App Notification Center (Header & Orb) */}
+
+      {/* 1. In-App Notification Center */}
       <section className="space-y-4">
         <div className="flex items-center gap-2">
           <BellRing className="w-4 h-4 text-muted-foreground" />
@@ -34,8 +76,8 @@ export function NotificationSettings() {
           </div>
           <Switch
             id="in-app-alerts"
-            checked={preferences?.in_app_alerts !== false} // Default to true
-            onCheckedChange={(v) => handleToggle('in_app_alerts', v)}
+            checked={preferences?.in_app_alerts !== false}
+            onCheckedChange={(v) => handlePreferenceUpdate('in_app_alerts', v)}
           />
         </div>
 
@@ -47,12 +89,12 @@ export function NotificationSettings() {
           <Switch
             id="in-app-sounds"
             checked={preferences?.in_app_sounds !== false}
-            onCheckedChange={(v) => handleToggle('in_app_sounds', v)}
+            onCheckedChange={(v) => handlePreferenceUpdate('in_app_sounds', v)}
           />
         </div>
       </section>
 
-      {/* 2. Push Notifications (Device Level) */}
+      {/* 2. Push Notifications */}
       <section className="space-y-4 pt-4 border-t">
         <div className="flex items-center gap-2">
           <Smartphone className="w-4 h-4 text-muted-foreground" />
@@ -62,12 +104,12 @@ export function NotificationSettings() {
         <div className="flex items-center justify-between gap-3">
           <div className="space-y-0.5 min-w-0">
             <Label htmlFor="push-notifications" className="text-sm font-medium">Enable Push</Label>
-            <p className="text-xs text-muted-foreground">Master switch for device notifications</p>
+            <p className="text-xs text-muted-foreground">Request device permission &amp; register token</p>
           </div>
           <Switch
             id="push-notifications"
             checked={preferences?.push_notifications || false}
-            onCheckedChange={(v) => handleToggle('push_notifications', v)}
+            onCheckedChange={handlePushToggle}
           />
         </div>
 
@@ -75,87 +117,137 @@ export function NotificationSettings() {
           <div className="space-y-4 pl-3 border-l-2 border-primary/20 mt-4">
             <div className="flex items-center justify-between gap-3">
               <div className="space-y-0.5 min-w-0">
-                <Label htmlFor="push-activity" className="text-sm font-medium">Activity & Goals</Label>
+                <Label htmlFor="push-activity" className="text-sm font-medium">Activity &amp; Goals</Label>
                 <p className="text-xs text-muted-foreground">Reminders and milestone celebrations</p>
               </div>
-              <Switch 
+              <Switch
                 id="push-activity"
                 checked={preferences?.push_activity !== false}
-                onCheckedChange={(v) => handleToggle('push_activity', v)} 
+                onCheckedChange={(v) => handlePreferenceUpdate('push_activity', v)}
               />
             </div>
-            <div className="flex items-center justify-between gap-3">
-              <div className="space-y-0.5 min-w-0">
-                <Label htmlFor="push-insights" className="text-sm font-medium">AI Insights</Label>
-                <p className="text-xs text-muted-foreground">Proactive health and financial alerts</p>
+            {payReady && (
+              <div className="flex items-center justify-between gap-3">
+                <div className="space-y-0.5 min-w-0">
+                  <Label htmlFor="push-insights" className="text-sm font-medium">AI Insights</Label>
+                  <p className="text-xs text-muted-foreground">Proactive health and financial alerts</p>
+                </div>
+                <Switch
+                  id="push-insights"
+                  checked={preferences?.push_insights || false}
+                  onCheckedChange={(v) => handlePreferenceUpdate('push_insights', v)}
+                />
               </div>
-              <Switch 
-                id="push-insights"
-                checked={preferences?.push_insights || false}
-                onCheckedChange={(v) => handleToggle('push_insights', v)} 
-              />
-            </div>
+            )}
           </div>
         )}
       </section>
 
-      {/* 3. Focus / Quiet Hours */}
+      {/* 3. Focus Mode with labeled profiles + history */}
       <section className="space-y-4 pt-4 border-t">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <Moon className="w-4 h-4 text-muted-foreground" />
             <h3 className="text-sm font-semibold">Focus Mode</h3>
           </div>
-          <Switch 
+          <Switch
             checked={preferences?.quiet_hours_enabled || false}
-            onCheckedChange={(v) => handleToggle('quiet_hours_enabled', v)}
+            onCheckedChange={handleFocusToggle}
           />
         </div>
 
         {preferences?.quiet_hours_enabled && (
-          <div className="grid grid-cols-2 gap-4 animate-in fade-in slide-in-from-top-2 duration-300">
-            <div className="space-y-2">
-              <Label className="text-xs text-muted-foreground">Quiet Hours Start</Label>
-              <Select 
-                value={preferences?.quiet_hours_start || "22:00"}
-                onValueChange={(v) => handleSelect('quiet_hours_start', v)}
-              >
-                <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {Array.from({ length: 24 }, (_, i) => {
-                    const hour = i.toString().padStart(2, '0');
-                    return <SelectItem key={i} value={`${hour}:00`}>{hour}:00</SelectItem>;
-                  })}
-                </SelectContent>
-              </Select>
+          <div className="space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
+            {/* Quick hours for the current/default profile */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label className="text-xs text-muted-foreground">Quiet Hours Start</Label>
+                <Select
+                  value={preferences?.quiet_hours_start || '22:00'}
+                  onValueChange={(v) => handlePreferenceUpdate('quiet_hours_start', v)}
+                >
+                  <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                  <SelectContent>{HOURS.map(h => <SelectItem key={h} value={h}>{h}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs text-muted-foreground">Quiet Hours End</Label>
+                <Select
+                  value={preferences?.quiet_hours_end || '08:00'}
+                  onValueChange={(v) => handlePreferenceUpdate('quiet_hours_end', v)}
+                >
+                  <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                  <SelectContent>{HOURS.map(h => <SelectItem key={h} value={h}>{h}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
             </div>
-            <div className="space-y-2">
-              <Label className="text-xs text-muted-foreground">Quiet Hours End</Label>
-              <Select 
-                value={preferences?.quiet_hours_end || "08:00"}
-                onValueChange={(v) => handleSelect('quiet_hours_end', v)}
-              >
-                <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {Array.from({ length: 24 }, (_, i) => {
-                    const hour = i.toString().padStart(2, '0');
-                    return <SelectItem key={i} value={`${hour}:00`}>{hour}:00</SelectItem>;
-                  })}
-                </SelectContent>
-              </Select>
+
+            {/* Saved profiles */}
+            {modes.length > 0 && (
+              <div className="space-y-2">
+                <Label className="text-xs text-muted-foreground">Saved Profiles</Label>
+                <ul className="space-y-1.5">
+                  {modes.map((m) => (
+                    <li key={m.id} className="flex items-center justify-between gap-2 p-2 rounded-md border border-border/50 bg-muted/20">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium truncate">{m.label}</span>
+                          {m.is_active && (
+                            <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-primary">
+                              <Check className="w-3 h-3" />active
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-[10px] text-muted-foreground">{m.quiet_hours_start} – {m.quiet_hours_end}</p>
+                      </div>
+                      {!m.is_active && (
+                        <Button size="sm" variant="outline" className="h-7 text-[11px]" onClick={() => activateFocus(m.id)}>
+                          Activate
+                        </Button>
+                      )}
+                      <Button size="icon" variant="ghost" className="h-7 w-7 text-muted-foreground" onClick={() => removeFocus(m.id)}>
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {/* Create new profile */}
+            <div className="space-y-2 p-2 rounded-md border border-dashed border-border">
+              <Label className="text-xs text-muted-foreground">New Profile</Label>
+              <Input
+                value={newLabel}
+                onChange={(e) => setNewLabel(e.target.value)}
+                placeholder="e.g. Work hours, Sleep, Travel"
+                className="h-9"
+              />
+              <div className="grid grid-cols-2 gap-2">
+                <Select value={newStart} onValueChange={setNewStart}>
+                  <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                  <SelectContent>{HOURS.map(h => <SelectItem key={h} value={h}>{h}</SelectItem>)}</SelectContent>
+                </Select>
+                <Select value={newEnd} onValueChange={setNewEnd}>
+                  <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                  <SelectContent>{HOURS.map(h => <SelectItem key={h} value={h}>{h}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+              <Button size="sm" className="w-full h-8" onClick={handleCreateFocus}>
+                <Plus className="w-3.5 h-3.5 mr-1" /> Save Profile
+              </Button>
             </div>
           </div>
         )}
       </section>
 
-      {/* 4. Supabase Email Guardrails */}
+      {/* 4. Email Comms */}
       <section className="space-y-4 pt-4 border-t">
         <div className="flex items-center gap-2">
           <Mail className="w-4 h-4 text-muted-foreground" />
           <h3 className="text-sm font-semibold">Email Comms</h3>
         </div>
 
-        {/* Security is hard-locked to true for compliance */}
         <div className="flex items-center justify-between gap-3 bg-muted/30 p-2.5 rounded-lg border border-border/50">
           <div className="flex items-center gap-3 min-w-0 opacity-80">
             <ShieldAlert className="w-4 h-4 text-destructive" />
@@ -167,29 +259,33 @@ export function NotificationSettings() {
           <Switch checked={true} disabled />
         </div>
 
-        <div className="flex items-center justify-between gap-3 pl-1">
-          <div className="space-y-0.5 min-w-0">
-            <Label htmlFor="email-marketing" className="text-sm font-medium">Product Updates</Label>
-            <p className="text-xs text-muted-foreground">Feature drops and announcements</p>
-          </div>
-          <Switch 
-            id="email-marketing"
-            checked={preferences?.marketing_emails || false}
-            onCheckedChange={(v) => handleToggle('marketing_emails', v)}
-          />
-        </div>
+        {payReady && (
+          <>
+            <div className="flex items-center justify-between gap-3 pl-1">
+              <div className="space-y-0.5 min-w-0">
+                <Label htmlFor="email-marketing" className="text-sm font-medium">Product Updates</Label>
+                <p className="text-xs text-muted-foreground">Feature drops and announcements</p>
+              </div>
+              <Switch
+                id="email-marketing"
+                checked={preferences?.marketing_emails || false}
+                onCheckedChange={(v) => handlePreferenceUpdate('marketing_emails', v)}
+              />
+            </div>
 
-        <div className="flex items-center justify-between gap-3 pl-1">
-          <div className="space-y-0.5 min-w-0">
-            <Label htmlFor="email-reports" className="text-sm font-medium">Monthly Reports</Label>
-            <p className="text-xs text-muted-foreground">Data summaries and health metrics</p>
-          </div>
-          <Switch 
-            id="email-reports"
-            checked={preferences?.email_reports !== false} // Default to true
-            onCheckedChange={(v) => handleToggle('email_reports', v)}
-          />
-        </div>
+            <div className="flex items-center justify-between gap-3 pl-1">
+              <div className="space-y-0.5 min-w-0">
+                <Label htmlFor="email-reports" className="text-sm font-medium">Monthly Reports</Label>
+                <p className="text-xs text-muted-foreground">Data summaries and health metrics</p>
+              </div>
+              <Switch
+                id="email-reports"
+                checked={preferences?.email_reports !== false}
+                onCheckedChange={(v) => handlePreferenceUpdate('email_reports', v)}
+              />
+            </div>
+          </>
+        )}
       </section>
 
     </div>

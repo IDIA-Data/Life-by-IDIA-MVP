@@ -16,7 +16,7 @@ const tiers = [
   {
     id: "pro" as SubscriptionTier,
     name: "IDIA Life Pro",
-    price: "$9.99",
+    price: "FREE until July 11th then $9.99",
     period: "/mo",
     subtitle: "Workforce Optimization",
     icon: Zap,
@@ -27,7 +27,7 @@ const tiers = [
   {
     id: "pro_plus" as SubscriptionTier,
     name: "IDIA Life Pro+",
-    price: "$29.99",
+    price: "FREE until July 11th then $29.99",
     period: "/mo",
     subtitle: "Cognitive Performance",
     icon: Brain,
@@ -39,7 +39,7 @@ const tiers = [
   {
     id: "pure_alpha" as SubscriptionTier,
     name: "Pure Alpha",
-    price: "$99.99",
+    price: "FREE until July 11th then $99.99",
     period: "/mo",
     subtitle: "Executive Sovereignty",
     icon: Crown,
@@ -74,7 +74,7 @@ const ProPaywall = ({ currentTier, onSubscribe }: ProPaywallProps) => {
       <div className="text-center space-y-1">
         <Shield className="w-5 h-5 text-[hsl(28,80%,55%)] mx-auto" />
         <h1 className="text-lg font-semibold tracking-tight">Unlock Your Edge</h1>
-        <p className="text-[11px] text-muted-foreground">Advanced cognitive & financial tools.</p>
+        <p className="text-[11px] text-muted-foreground">PREVIEW: Advanced Cognitive & Financial Tools.</p>
       </div>
 
       <div className="space-y-2.5">

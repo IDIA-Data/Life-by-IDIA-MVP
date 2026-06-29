@@ -7,6 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Eye, EyeOff, Mail, Lock, User, KeyRound } from "lucide-react";
 import { runVaultGuard } from "@/lib/vaultGuard";
+import { SecureStoragePlugin } from "capacitor-secure-storage-plugin";
 
 const Auth = () => {
   const [searchParams] = useSearchParams();
@@ -67,6 +68,7 @@ const Auth = () => {
       if (isLogin) {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
+        supabase.functions.invoke("send-security-alert", { body: { event: "new_login" } }).catch(() => {});
         toast({ title: "Welcome back!", description: "You've been signed in successfully." });
       } else {
         const { error } = await supabase.auth.signUp({
@@ -87,14 +89,137 @@ const Auth = () => {
 
   const handleOAuthSignIn = async (provider: "google" | "apple") => {
     setIsLoading(true);
+    console.log(`[START] OAuth Sign-In Dispatch · provider=${provider}`);
     try {
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider,
-        // Surgical Fix: Land on root after OAuth handshake
-        options: { redirectTo: `${window.location.origin}/` },
-      });
-      if (error) throw error;
+      const { Capacitor } = await import("@capacitor/core");
+      const isNative = Capacitor.isNativePlatform();
+      const platform = Capacitor.getPlatform();
+      console.log(`[INFO][OAUTH] platform=${platform} isNative=${isNative}`);
+
+      if (provider === "apple" && isNative) {
+        console.log("[START] Native Apple Sign-In Intercept");
+        const { SignInWithApple } = await import("@capacitor-community/apple-sign-in");
+
+        // 1. Native Apple UI — requests Name & Email (only present on first sign-in)
+        const result: any = await SignInWithApple.authorize({
+          clientId: "com.thebigidia.app",
+          redirectURI: `${window.location.origin}/`,
+          scopes: "email name",
+        });
+
+        // 2. Intercept PII on-device — seal in Secure Enclave
+        if (result?.response?.email || result?.response?.givenName) {
+          console.log("[APPLE_AUTH] PII detected. Sealing in local Secure Enclave.");
+          const piiPayload = {
+            first_name: result.response.givenName || "",
+            last_name: result.response.familyName || "",
+            email: result.response.email || "",
+            phone: "",
+          };
+          await SecureStoragePlugin.set({
+            key: "user_pii_profile",
+            value: JSON.stringify(piiPayload),
+          });
+        }
+
+        // 3. Authenticate with Supabase using only the cryptographic ID token (zero PII)
+        const { error } = await supabase.auth.signInWithIdToken({
+          provider: "apple",
+          token: result.response.identityToken,
+        });
+        if (error) throw error;
+        console.log("[END] Native Apple Auth Complete.");
+      } else if (provider === "google" && isNative) {
+        // ============================================================
+        // NATIVE GOOGLE SIGN-IN INTERCEPT (Android primarily; also iOS)
+        // Mirrors the Apple flow: native UI → seal PII in Secure Enclave
+        // → exchange ID token via Supabase signInWithIdToken (zero-PII DB)
+        // ============================================================
+        console.log("[START] Native Google Sign-In Intercept");
+
+        console.log("[START][GOOGLE_AUTH] Dynamic import of @codetrix-studio/capacitor-google-auth");
+        const { GoogleAuth } = await import("@codetrix-studio/capacitor-google-auth");
+        console.log("[END][GOOGLE_AUTH] Plugin module loaded");
+
+        console.log("[START][GOOGLE_AUTH] Plugin initialize()");
+        try {
+          await GoogleAuth.initialize({
+            clientId:
+              "349472255801-091p5a3320h0kb9636hjsd2otfs160ct.apps.googleusercontent.com",
+            scopes: ["profile", "email"],
+            grantOfflineAccess: false,
+          });
+          console.log("[END:OK][GOOGLE_AUTH] Plugin initialized");
+        } catch (initErr: any) {
+          console.error("[END:FAIL][GOOGLE_AUTH] initialize() threw", initErr?.message || initErr);
+          throw initErr;
+        }
+
+        console.log("[START][GOOGLE_AUTH] signIn() — awaiting native consent sheet");
+        const result: any = await GoogleAuth.signIn();
+        console.log("[END:OK][GOOGLE_AUTH] signIn resolved", {
+          hasIdToken: !!result?.authentication?.idToken,
+          hasEmail: !!result?.email,
+          hasName: !!(result?.givenName || result?.familyName),
+        });
+
+        // Zero-PII: seal name/email locally; never persist to Supabase public schema
+        if (result?.email || result?.givenName || result?.familyName) {
+          console.log("[START][GOOGLE_AUTH] Sealing PII in Secure Enclave");
+          const piiPayload = {
+            first_name: result.givenName || "",
+            last_name: result.familyName || "",
+            email: result.email || "",
+            phone: "",
+          };
+          try {
+            await SecureStoragePlugin.set({
+              key: "user_pii_profile",
+              value: JSON.stringify(piiPayload),
+            });
+            console.log("[END:OK][GOOGLE_AUTH] PII sealed in Secure Enclave");
+          } catch (sealErr: any) {
+            console.error(
+              "[END:FAIL][GOOGLE_AUTH] Secure Enclave seal failed",
+              sealErr?.message || sealErr,
+            );
+            // Non-fatal — continue with Supabase auth so user can still log in.
+          }
+        } else {
+          console.log("[INFO][GOOGLE_AUTH] No PII returned (returning user) — skip seal");
+        }
+
+        const idToken: string | undefined = result?.authentication?.idToken;
+        if (!idToken) {
+          console.error("[END:FAIL][GOOGLE_AUTH] No idToken on plugin result");
+          throw new Error("Google Sign-In returned no ID token.");
+        }
+
+        console.log("[START][GOOGLE_AUTH] supabase.auth.signInWithIdToken");
+        const { error } = await supabase.auth.signInWithIdToken({
+          provider: "google",
+          token: idToken,
+        });
+        if (error) {
+          console.error("[END:FAIL][GOOGLE_AUTH] Supabase token exchange failed", error.message);
+          throw error;
+        }
+        console.log("[END:OK][GOOGLE_AUTH] Supabase session established");
+        console.log("[END] Native Google Auth Complete.");
+      } else {
+        console.log(`[INFO][OAUTH] Falling back to web signInWithOAuth · provider=${provider}`);
+        const { error } = await supabase.auth.signInWithOAuth({
+          provider,
+          options: {
+            redirectTo: isNative ? "idialife://auth-callback" : `${window.location.origin}/`,
+          },
+        });
+        if (error) throw error;
+        console.log("[END][OAUTH] Web OAuth redirect dispatched");
+      }
+      console.log(`[END] OAuth Sign-In Dispatch · provider=${provider}`);
     } catch (error: any) {
+      console.error(`[END:FAIL] OAuth Sign-In · provider=${provider}`, error?.message || error);
       toast({ title: `${provider} Sign In failed`, description: error.message, variant: "destructive" });
       setIsLoading(false);
     }
@@ -148,6 +273,8 @@ const Auth = () => {
         password: newPassword,
       });
       if (updateError) throw updateError;
+
+      supabase.functions.invoke("send-security-alert", { body: { event: "password_changed" } }).catch(() => {});
 
       toast({
         title: "Password Updated!",

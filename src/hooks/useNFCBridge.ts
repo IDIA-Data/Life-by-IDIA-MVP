@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "@/components/ui/sonner";
+import { useProfile } from "@/hooks/useProfile";
 
 /**
  * useNFCBridge — IDIA Sovereign Handshake Bridge
@@ -31,6 +32,8 @@ export function useNFCBridge() {
   const [isBridgeAvailable, setIsBridgeAvailable] = useState<boolean>(() => detectBridge());
   const [isScanning, setIsScanning] = useState(false);
   const scanningRef = useRef(false);
+  const { preferences } = useProfile();
+  const nfcAllowed = (preferences as any)?.privacy_nfc !== false;
 
   // ---- Listener installation ---------------------------------------------
   useEffect(() => {
@@ -40,14 +43,19 @@ export function useNFCBridge() {
     console.log("[BRIDGE_LISTENER_INIT_START]");
     const w = window as NFCWindow;
 
-    const completeHandler = (peerToken: string) => {
+    const completeHandler = (peerPayload: string | Record<string, unknown>) => {
       console.log("[BRIDGE_NATIVE_CALLBACK_RECEIVED_START]");
-      console.log("[BRIDGE_HANDSHAKE_RESOLVED]", { token: peerToken?.substring(0, 8) + "..." });
+      // Native may send a JSON object (initiateNfcHandshake) OR a raw token string (legacy NFCBridge).
+      const peerToken =
+        typeof peerPayload === "string"
+          ? peerPayload
+          : (peerPayload as any)?.scanned_intent ?? JSON.stringify(peerPayload);
+      console.log("[BRIDGE_HANDSHAKE_RESOLVED]", { token: String(peerToken).substring(0, 8) + "..." });
       scanningRef.current = false;
       setIsScanning(false);
-      
+
       window.dispatchEvent(
-        new CustomEvent("nfc:scan-complete", { detail: { peerToken } })
+        new CustomEvent("nfc:scan-complete", { detail: { peerToken, raw: peerPayload } })
       );
       console.log("[BRIDGE_NATIVE_CALLBACK_RECEIVED_END]");
     };
@@ -84,6 +92,14 @@ export function useNFCBridge() {
   const initiateSovereignHandshake = useCallback(
     (mode: NFCBridgeMode = "STANDARD") => {
       console.log("[BRIDGE_HANDSHAKE_START]", { mode });
+
+      if (!nfcAllowed) {
+        console.warn("[BRIDGE_HANDSHAKE_BLOCKED] NFC disabled in Privacy Settings");
+        toast("NFC is turned off", {
+          description: "Enable NFC Scan under Settings → Privacy to use the Sovereign Handshake.",
+        });
+        return;
+      }
 
       if (scanningRef.current) {
         console.warn("[BRIDGE_HANDSHAKE_ABORTED] Scanning already in progress");
@@ -128,7 +144,7 @@ export function useNFCBridge() {
       
       console.log("[BRIDGE_HANDSHAKE_END]");
     },
-    []
+    [nfcAllowed]
   );
 
   return { isBridgeAvailable, isScanning, initiateSovereignHandshake };

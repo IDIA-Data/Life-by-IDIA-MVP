@@ -23,6 +23,27 @@ serve(async (req) => {
       });
     }
 
+    // Auth guard - require valid JWT
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+    {
+      const userClient = createClient(
+        supabaseUrl,
+        Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+        { global: { headers: { Authorization: authHeader } } }
+      );
+      const { data: authData, error: authErr } = await userClient.auth.getUser();
+      if (authErr || !authData?.user) {
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+          status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+    }
+
     const supabase = createClient(supabaseUrl, supabaseKey);
     const { user_id } = await req.json();
 

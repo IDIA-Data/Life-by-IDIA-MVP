@@ -70,8 +70,8 @@ const DataSourceModal = ({ source, isOpen, onClose, onComplete }: DataSourceModa
         setIsConnecting(false);
         return;
       } else if (sourceName.includes("strava")) {
-        const { data, error } = await supabase.functions.invoke("strava-auth-url", {
-          body: { userId, aca_hash_key: hash, aca_payload: payload },
+        const { data, error } = await supabase.functions.invoke("strava-controller", {
+          body: { action: "get-auth-url", userId, aca_hash_key: hash, aca_payload: payload },
         });
         if (error) {
           setErrorMessage("Failed to connect to Strava. Please try again.");

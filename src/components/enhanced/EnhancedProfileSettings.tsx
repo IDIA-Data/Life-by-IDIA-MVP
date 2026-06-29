@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+
+import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,6 +33,16 @@ const EnhancedProfileSettings: React.FC = () => {
   const [selectedInterests, setSelectedInterests] = useState<string[]>(interests ? interests.map((i) => i.id) : []);
   const [, setAvatarFile] = useState<File | null>(null);
 
+  // 1. Setup matching cache-busting state
+  const [avatarHash, setAvatarHash] = useState(Date.now());
+
+  // 2. Listen to self-dispatched events ensuring total sync
+  useEffect(() => {
+    const handleAvatarUpdate = () => setAvatarHash(Date.now());
+    window.addEventListener("avatar-updated", handleAvatarUpdate);
+    return () => window.removeEventListener("avatar-updated", handleAvatarUpdate);
+  }, []);
+
   if (loading) {
     return (
       <div className="p-3">
@@ -52,11 +63,15 @@ const EnhancedProfileSettings: React.FC = () => {
     );
   }
 
-  const handleAvatarUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleAvatarUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
       setAvatarFile(file);
-      uploadAvatar(file);
+      // Ensure we await the upload before dispatching the refresh event
+      await uploadAvatar(file);
+
+      // 3. Dispatch global atomic event to instantly refresh Header & Settings avatars
+      window.dispatchEvent(new Event("avatar-updated"));
     }
   };
 
@@ -92,6 +107,9 @@ const EnhancedProfileSettings: React.FC = () => {
     );
   };
 
+  // 4. Apply the cache-busted URL
+  const avatarSrc = profile.avatar_url ? `${profile.avatar_url}?t=${avatarHash}` : "";
+
   return (
     <div className="p-2 sm:p-3 space-y-3 max-w-3xl mx-auto">
       {/* Profile */}
@@ -108,7 +126,7 @@ const EnhancedProfileSettings: React.FC = () => {
         <CardContent className={cardBody}>
           <div className="flex items-center gap-3">
             <Avatar className="w-14 h-14">
-              <AvatarImage src={profile.avatar_url || ""} />
+              <AvatarImage src={avatarSrc} />
               <AvatarFallback>
                 {profile.first_name?.[0]}
                 {profile.last_name?.[0]}

@@ -13,7 +13,9 @@ interface SpotlightTab {
   copy: string;
 }
 
-const SPOTLIGHT_TABS: SpotlightTab[] = [
+import { IDIA_PAY_RELEASE_DATE } from "@/config/release";
+
+const ALL_SPOTLIGHT_TABS: SpotlightTab[] = [
   { id: "wallet", label: "Wallet", copy: "See, manage, and control your financial world with clarity." },
   { id: "data", label: "My Data", copy: "Connect your apps. Turn everyday digital activity into earnings." },
   { id: "life", label: "Life", copy: "Take assessments that reveal how you think, act, and operate." },
@@ -26,6 +28,12 @@ const WelcomeSequence = ({ tabRefs, onComplete }: WelcomeSequenceProps) => {
   const [step, setStep] = useState<1 | 2 | 3 | 4 | 5>(1);
   const [tabIndex, setTabIndex] = useState(0);
   const [spotlightRect, setSpotlightRect] = useState<{ x: number; y: number; r: number } | null>(null);
+
+  const SPOTLIGHT_TABS = useMemo(() => {
+    const isPayReady = new Date() >= IDIA_PAY_RELEASE_DATE;
+    const gated = new Set(isPayReady ? [] : ["shop", "life", "pro"]);
+    return ALL_SPOTLIGHT_TABS.filter((t) => !gated.has(t.id));
+  }, []);
 
   useEffect(() => {
     console.log("[WELCOME_SEQUENCE_START]");
@@ -40,8 +48,15 @@ const WelcomeSequence = ({ tabRefs, onComplete }: WelcomeSequenceProps) => {
     if (step !== 3) return;
     const compute = () => {
       const tab = SPOTLIGHT_TABS[tabIndex];
+      if (!tab) return;
       const el = tabRefs.current?.[tab.id];
-      if (!el) return;
+      if (!el) {
+        // Defensive: tab not mounted (e.g., gated). Skip forward.
+        console.log(`[SPOTLIGHT_TAB_MISSING: ${tab.id}] — skipping`);
+        if (tabIndex < SPOTLIGHT_TABS.length - 1) setTabIndex(tabIndex + 1);
+        else setStep(4);
+        return;
+      }
       const rect = el.getBoundingClientRect();
       const x = rect.left + rect.width / 2;
       const y = rect.top + rect.height / 2;
@@ -52,7 +67,7 @@ const WelcomeSequence = ({ tabRefs, onComplete }: WelcomeSequenceProps) => {
     compute();
     window.addEventListener("resize", compute);
     return () => window.removeEventListener("resize", compute);
-  }, [step, tabIndex, tabRefs]);
+  }, [step, tabIndex, tabRefs, SPOTLIGHT_TABS]);
 
   const finish = () => {
     try {
@@ -94,16 +109,25 @@ const WelcomeSequence = ({ tabRefs, onComplete }: WelcomeSequenceProps) => {
     <div
       className="fixed inset-0 z-[200] overflow-hidden text-slate-800 flex flex-col"
       style={{
-        background: `
-          radial-gradient(ellipse at 15% 10%, rgba(186,230,253,0.85) 0%, transparent 55%),
-          radial-gradient(ellipse at 85% 20%, rgba(254,243,199,0.85) 0%, transparent 55%),
-          radial-gradient(ellipse at 50% 95%, rgba(224,242,254,0.9) 0%, transparent 60%),
-          linear-gradient(180deg, #fbfdff 0%, #f3f7fb 50%, #fefaf2 100%)
-        `,
         paddingTop: "env(safe-area-inset-top)",
         paddingBottom: "env(safe-area-inset-bottom)",
       }}
     >
+      {/* Glossy backdrop — hidden during Step 3 so the real menu bar shows through */}
+      {step !== 3 && (
+        <div
+          className="absolute inset-0 -z-10 pointer-events-none"
+          style={{
+            background: `
+              radial-gradient(ellipse at 15% 10%, rgba(186,230,253,0.85) 0%, transparent 55%),
+              radial-gradient(ellipse at 85% 20%, rgba(254,243,199,0.85) 0%, transparent 55%),
+              radial-gradient(ellipse at 50% 95%, rgba(224,242,254,0.9) 0%, transparent 60%),
+              linear-gradient(180deg, #fbfdff 0%, #f3f7fb 50%, #fefaf2 100%)
+            `,
+          }}
+        />
+      )}
+
       {/* Persistent Skip */}
       <button
         onClick={() => {
@@ -246,9 +270,11 @@ const WelcomeSequence = ({ tabRefs, onComplete }: WelcomeSequenceProps) => {
           <div
             className="absolute inset-0 pointer-events-none transition-all duration-500"
             style={{
-              background: `radial-gradient(circle at ${spotlightRect.x}px ${spotlightRect.y}px, rgba(255,255,255,0) 0px, rgba(255,255,255,0) ${spotlightRect.r}px, rgba(248,250,252,0.88) ${spotlightRect.r + 24}px)`,
-              backdropFilter: "blur(2px)",
-              WebkitBackdropFilter: "blur(2px)",
+              background: "rgba(248,250,252,0.78)",
+              backdropFilter: "blur(10px)",
+              WebkitBackdropFilter: "blur(10px)",
+              maskImage: `radial-gradient(circle at ${spotlightRect.x}px ${spotlightRect.y}px, transparent 0px, transparent ${spotlightRect.r}px, rgba(0,0,0,0.35) ${spotlightRect.r + 24}px, black ${spotlightRect.r + 110}px)`,
+              WebkitMaskImage: `radial-gradient(circle at ${spotlightRect.x}px ${spotlightRect.y}px, transparent 0px, transparent ${spotlightRect.r}px, rgba(0,0,0,0.35) ${spotlightRect.r + 24}px, black ${spotlightRect.r + 110}px)`,
             }}
           />
           <div

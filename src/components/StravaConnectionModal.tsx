@@ -101,8 +101,8 @@ const StravaConnectionModal = ({ isOpen, onClose, onComplete, existingConnection
       console.log('Starting Strava connection for user:', currentUserId);
       
       // Get OAuth URL from edge function with proper client ID
-      const { data: urlData, error: urlError } = await supabase.functions.invoke('strava-auth-url', {
-        body: { userId: currentUserId }
+      const { data: urlData, error: urlError } = await supabase.functions.invoke('strava-controller', {
+        body: { action: 'get-auth-url', userId: currentUserId }
       });
 
       console.log('OAuth URL response:', { urlData, urlError });

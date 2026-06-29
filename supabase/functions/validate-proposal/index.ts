@@ -20,6 +20,27 @@ serve(async (req) => {
   }
 
   try {
+    // Auth guard - require valid JWT
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+    {
+      const userClient = createClient(
+        supabaseUrl,
+        Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+        { global: { headers: { Authorization: authHeader } } }
+      );
+      const { data: authData, error: authErr } = await userClient.auth.getUser();
+      if (authErr || !authData?.user) {
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+          status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+    }
+
     const { proposalId, title, description, category } = await req.json();
 
     if (!openAIApiKey) {
@@ -67,18 +88,22 @@ Respond with a JSON object: {"score": number, "feedback": "explanation"}
     const aiResponse = await response.json();
     const validationResult = JSON.parse(aiResponse.choices[0].message.content);
 
-    // Update the proposal with AI validation results
+    // Update the proposal with AI validation results (best-effort; tolerate missing columns)
+    const score = Number(validationResult.score);
+    const nextStatus = score >= 7 ? 'active' : score >= 4 ? 'under_review' : 'rejected';
+    const updatePayload: Record<string, unknown> = { status: nextStatus };
+    try {
+      (updatePayload as any).ai_validation_score = score;
+      (updatePayload as any).ai_validation_feedback = validationResult.feedback;
+    } catch (_) { /* noop */ }
+
     const { error } = await supabase
-      .from('user_proposals')
-      .update({
-        ai_validation_score: validationResult.score,
-        ai_validation_feedback: validationResult.feedback,
-        status: validationResult.score >= 7 ? 'approved' : validationResult.score >= 4 ? 'under_review' : 'rejected',
-        updated_at: new Date().toISOString()
-      })
+      .from('dao_proposals')
+      .update(updatePayload)
       .eq('id', proposalId);
 
-    if (error) throw error;
+    if (error) console.warn('validate-proposal update warning:', error.message);
+
 
     return new Response(JSON.stringify({ 
       score: validationResult.score, 

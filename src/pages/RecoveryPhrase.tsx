@@ -66,7 +66,7 @@ const RecoveryPhrase = () => {
   const handleComplete = () => {
     console.log("[END: Backup Generation]");
     if (viewMode) navigate("/settings", { replace: true });
-    else navigate("/onboarding", { replace: true });
+    else navigate("/", { replace: true });
   };
 
   const words = phrase ? phrase.trim().split(/\s+/) : [];

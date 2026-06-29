@@ -45,8 +45,10 @@ const ProposalForm = ({ onClose, onSuccess }: ProposalFormProps) => {
     }
 
     setIsSubmitting(true);
+    console.log("[PROPOSAL_SUBMIT][FORM_DISPATCH][START] Form submission initiated.");
 
     try {
+
       const { data: { user } } = await supabase.auth.getUser();
       
       if (!user) throw new Error('User not authenticated');
@@ -75,20 +77,19 @@ const ProposalForm = ({ onClose, onSuccess }: ProposalFormProps) => {
         frequency_score: 2
       });
 
-      // Call AI validation function
-      const response = await fetch(`https://zxyngqciipcvveigrzqt.supabase.co/functions/v1/validate-proposal`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inp4eW5ncWNpaXBjdnZlaWdyenF0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTEzMjIwNzYsImV4cCI6MjA2Njg5ODA3Nn0.w-fUxBsH8wZ5ewzQkGAO6sEooqPEYbYJI_vL5F36HSU`
-        },
-        body: JSON.stringify({
-          proposalId: proposal.id,
-          title: title.trim(),
-          description: description.trim(),
-          category
-        })
-      });
+      // Call AI validation function via Supabase SDK (uses live publishable key + session)
+      console.log("[PROPOSAL_FORM][VALIDATION_SUBMIT][START] Invoking edge engine for proposal checking...");
+      const { data: validationResult, error: validationError } = await supabase.functions.invoke(
+        'validate-proposal',
+        {
+          body: {
+            proposalId: proposal.id,
+            title: title.trim(),
+            description: description.trim(),
+            category,
+          },
+        }
+      );
 
       // Track AI validation attempt
       eventTracker.trackAIInteraction({
@@ -99,11 +100,12 @@ const ProposalForm = ({ onClose, onSuccess }: ProposalFormProps) => {
         feature: 'proposal_validation'
       });
 
-      if (!response.ok) {
-        throw new Error('Failed to validate proposal');
+      if (validationError) {
+        console.error("[PROPOSAL_FORM][VALIDATION_SUBMIT][END:FAIL]", validationError.message);
+        throw new Error(validationError.message || 'Failed to validate proposal');
       }
+      console.log("[PROPOSAL_FORM][VALIDATION_SUBMIT][END:OK] Proposal structural constraints verified.");
 
-      const validationResult = await response.json();
 
       // Track validation result
       eventTracker.trackVotingAction({
@@ -114,6 +116,7 @@ const ProposalForm = ({ onClose, onSuccess }: ProposalFormProps) => {
         frequency_score: 2
       });
 
+      console.log("[PROPOSAL_SUBMIT][FORM_DISPATCH][SUCCESS] Proposal pipeline completed.");
       toast({
         title: "Proposal submitted!",
         description: `Your proposal has been ${validationResult.status}. ${validationResult.feedback}`,
@@ -122,7 +125,8 @@ const ProposalForm = ({ onClose, onSuccess }: ProposalFormProps) => {
       onSuccess();
       onClose();
     } catch (error: any) {
-      console.error('Error submitting proposal:', error);
+      console.error("[PROPOSAL_SUBMIT][FORM_DISPATCH][FATAL_FAIL]", error?.message ?? error);
+
       
       // Track error through synapse
       eventTracker.trackVotingAction({

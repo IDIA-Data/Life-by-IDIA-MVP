@@ -59,3 +59,9 @@ verify_jwt = false
 
 [functions.stablecoin-rails]
 verify_jwt = false
+
+[functions.purge-identity]
+verify_jwt = false
+
+[functions.predictive-insights]
+verify_jwt = true

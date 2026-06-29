@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { ShieldCheck, Activity, Volume2, Accessibility, Wind, Heart, Info } from "lucide-react";
+import InsightsSection from "./insights/InsightsSection";
 import { supabase } from "@/integrations/supabase/client";
 import { Badge } from "@/components/ui/badge";
 import { 
@@ -158,6 +159,8 @@ const HRIDashboard = ({ isMasked = false }: { isMasked?: boolean }) => {
           No occupational drift detected.
         </p>
       </div>
+
+      <InsightsSection tier="pro" isMasked={isMasked} />
     </div>
   );
 };

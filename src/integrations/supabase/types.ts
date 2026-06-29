@@ -24,6 +24,10 @@ export type Database = {
           company_name: string
           contact_role: string
           created_at: string | null
+          denial_cause: string | null
+          denial_remediation: string | null
+          denied_at: string | null
+          denied_by: string | null
           document_paths: string[]
           ein: string | null
           entity_type: string | null
@@ -46,6 +50,10 @@ export type Database = {
           company_name: string
           contact_role: string
           created_at?: string | null
+          denial_cause?: string | null
+          denial_remediation?: string | null
+          denied_at?: string | null
+          denied_by?: string | null
           document_paths?: string[]
           ein?: string | null
           entity_type?: string | null
@@ -68,6 +76,10 @@ export type Database = {
           company_name?: string
           contact_role?: string
           created_at?: string | null
+          denial_cause?: string | null
+          denial_remediation?: string | null
+          denied_at?: string | null
+          denied_by?: string | null
           document_paths?: string[]
           ein?: string | null
           entity_type?: string | null
@@ -770,6 +782,45 @@ export type Database = {
           },
         ]
       }
+      business_permits: {
+        Row: {
+          business_id: string
+          created_at: string
+          expiration_date: string
+          id: string
+          inspector_name: string | null
+          is_valid: boolean
+          location: string
+          permit_number: string
+          permit_type: string
+          updated_at: string
+        }
+        Insert: {
+          business_id: string
+          created_at?: string
+          expiration_date: string
+          id?: string
+          inspector_name?: string | null
+          is_valid?: boolean
+          location: string
+          permit_number: string
+          permit_type: string
+          updated_at?: string
+        }
+        Update: {
+          business_id?: string
+          created_at?: string
+          expiration_date?: string
+          id?: string
+          inspector_name?: string | null
+          is_valid?: boolean
+          location?: string
+          permit_number?: string
+          permit_type?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       business_processing_queue: {
         Row: {
           business_id: string
@@ -1075,6 +1126,87 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      committee_application_sponsorships: {
+        Row: {
+          application_id: string
+          created_at: string | null
+          id: string
+          sponsor_aca_hash: string
+          sponsor_user_id: string
+        }
+        Insert: {
+          application_id: string
+          created_at?: string | null
+          id?: string
+          sponsor_aca_hash: string
+          sponsor_user_id: string
+        }
+        Update: {
+          application_id?: string
+          created_at?: string | null
+          id?: string
+          sponsor_aca_hash?: string
+          sponsor_user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "committee_application_sponsorships_application_id_fkey"
+            columns: ["application_id"]
+            isOneToOne: false
+            referencedRelation: "committee_applications"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "committee_application_sponsorships_application_id_fkey"
+            columns: ["application_id"]
+            isOneToOne: false
+            referencedRelation: "committee_applications_public"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      committee_applications: {
+        Row: {
+          aca_hash_key: string
+          aca_payload: Json
+          committee_id: string
+          created_at: string | null
+          id: string
+          risk_flags: Json | null
+          risk_score: number | null
+          sponsor_count: number | null
+          statement_of_competence: string
+          status: string
+          user_id: string
+        }
+        Insert: {
+          aca_hash_key: string
+          aca_payload: Json
+          committee_id: string
+          created_at?: string | null
+          id?: string
+          risk_flags?: Json | null
+          risk_score?: number | null
+          sponsor_count?: number | null
+          statement_of_competence: string
+          status?: string
+          user_id: string
+        }
+        Update: {
+          aca_hash_key?: string
+          aca_payload?: Json
+          committee_id?: string
+          created_at?: string | null
+          id?: string
+          risk_flags?: Json | null
+          risk_score?: number | null
+          sponsor_count?: number | null
+          statement_of_competence?: string
+          status?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       community_pool_ledger: {
         Row: {
@@ -1427,76 +1559,319 @@ export type Database = {
         }
         Relationships: []
       }
+      dao_hats: {
+        Row: {
+          created_at: string | null
+          eligibility_status: string | null
+          granted_at: string
+          hat_type: string
+          id: string
+          last_attested_at: string | null
+          provisioned_by: string | null
+          revoked_at: string | null
+          user_id: string
+          veto_aca_hash: string | null
+          veto_aca_payload: Json | null
+          veto_extended: boolean | null
+          veto_extended_at: string | null
+          veto_reason: string | null
+          veto_window_end: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          eligibility_status?: string | null
+          granted_at?: string
+          hat_type: string
+          id?: string
+          last_attested_at?: string | null
+          provisioned_by?: string | null
+          revoked_at?: string | null
+          user_id: string
+          veto_aca_hash?: string | null
+          veto_aca_payload?: Json | null
+          veto_extended?: boolean | null
+          veto_extended_at?: string | null
+          veto_reason?: string | null
+          veto_window_end?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          eligibility_status?: string | null
+          granted_at?: string
+          hat_type?: string
+          id?: string
+          last_attested_at?: string | null
+          provisioned_by?: string | null
+          revoked_at?: string | null
+          user_id?: string
+          veto_aca_hash?: string | null
+          veto_aca_payload?: Json | null
+          veto_extended?: boolean | null
+          veto_extended_at?: string | null
+          veto_reason?: string | null
+          veto_window_end?: string | null
+        }
+        Relationships: []
+      }
+      dao_msa_metrics: {
+        Row: {
+          current_value: number | null
+          id: string
+          measured_at: string | null
+          sla_name: string
+          status: string | null
+          target_value: number | null
+        }
+        Insert: {
+          current_value?: number | null
+          id?: string
+          measured_at?: string | null
+          sla_name: string
+          status?: string | null
+          target_value?: number | null
+        }
+        Update: {
+          current_value?: number | null
+          id?: string
+          measured_at?: string | null
+          sla_name?: string
+          status?: string | null
+          target_value?: number | null
+        }
+        Relationships: []
+      }
+      dao_pending_actions: {
+        Row: {
+          category: string | null
+          created_at: string | null
+          description: string | null
+          escrow_target: string | null
+          id: string
+          onchain_proposal_id: number | null
+          processed_at: string | null
+          status: string | null
+          timelock_expires_at: string
+          title: string
+          tx_hash: string | null
+          veto_count: number | null
+          veto_threshold: number | null
+        }
+        Insert: {
+          category?: string | null
+          created_at?: string | null
+          description?: string | null
+          escrow_target?: string | null
+          id?: string
+          onchain_proposal_id?: number | null
+          processed_at?: string | null
+          status?: string | null
+          timelock_expires_at: string
+          title: string
+          tx_hash?: string | null
+          veto_count?: number | null
+          veto_threshold?: number | null
+        }
+        Update: {
+          category?: string | null
+          created_at?: string | null
+          description?: string | null
+          escrow_target?: string | null
+          id?: string
+          onchain_proposal_id?: number | null
+          processed_at?: string | null
+          status?: string | null
+          timelock_expires_at?: string
+          title?: string
+          tx_hash?: string | null
+          veto_count?: number | null
+          veto_threshold?: number | null
+        }
+        Relationships: []
+      }
       dao_proposals: {
         Row: {
+          aca_hash_key: string | null
+          aca_payload: Json | null
+          author_id: string | null
+          committee_id: string | null
+          committee_quorum_required: number | null
           created_at: string | null
           description: string | null
           end_date: string | null
+          escalated_at: string | null
+          escalated_by: string | null
           id: string
+          lifecycle_phase: string | null
+          on_chain_block: number | null
+          on_chain_id: string | null
+          proposal_calldatas: string[] | null
+          proposal_targets: string[] | null
+          proposal_values: string[] | null
           proposer_id: string | null
           quorum_threshold: number | null
           status: string | null
           title: string
+          tx_hash: string | null
           vote_type: string | null
+          voting_modality: string | null
         }
         Insert: {
+          aca_hash_key?: string | null
+          aca_payload?: Json | null
+          author_id?: string | null
+          committee_id?: string | null
+          committee_quorum_required?: number | null
           created_at?: string | null
           description?: string | null
           end_date?: string | null
+          escalated_at?: string | null
+          escalated_by?: string | null
           id?: string
+          lifecycle_phase?: string | null
+          on_chain_block?: number | null
+          on_chain_id?: string | null
+          proposal_calldatas?: string[] | null
+          proposal_targets?: string[] | null
+          proposal_values?: string[] | null
           proposer_id?: string | null
           quorum_threshold?: number | null
           status?: string | null
           title: string
+          tx_hash?: string | null
           vote_type?: string | null
+          voting_modality?: string | null
         }
         Update: {
+          aca_hash_key?: string | null
+          aca_payload?: Json | null
+          author_id?: string | null
+          committee_id?: string | null
+          committee_quorum_required?: number | null
           created_at?: string | null
           description?: string | null
           end_date?: string | null
+          escalated_at?: string | null
+          escalated_by?: string | null
           id?: string
+          lifecycle_phase?: string | null
+          on_chain_block?: number | null
+          on_chain_id?: string | null
+          proposal_calldatas?: string[] | null
+          proposal_targets?: string[] | null
+          proposal_values?: string[] | null
           proposer_id?: string | null
           quorum_threshold?: number | null
           status?: string | null
           title?: string
+          tx_hash?: string | null
           vote_type?: string | null
+          voting_modality?: string | null
         }
         Relationships: []
       }
-      dao_votes: {
+      dao_treasury_flows: {
         Row: {
-          created_at: string | null
-          credits_spent: number
+          amount_usd: number
+          asset: string
+          counterparty_label: string | null
+          direction: string
           id: string
-          proposal_id: string | null
-          user_id: string | null
-          vote_weight: number
+          recorded_at: string | null
         }
         Insert: {
-          created_at?: string | null
-          credits_spent: number
+          amount_usd: number
+          asset: string
+          counterparty_label?: string | null
+          direction: string
           id?: string
-          proposal_id?: string | null
-          user_id?: string | null
-          vote_weight: number
+          recorded_at?: string | null
         }
         Update: {
-          created_at?: string | null
-          credits_spent?: number
+          amount_usd?: number
+          asset?: string
+          counterparty_label?: string | null
+          direction?: string
           id?: string
-          proposal_id?: string | null
-          user_id?: string | null
-          vote_weight?: number
+          recorded_at?: string | null
+        }
+        Relationships: []
+      }
+      dao_vetoes: {
+        Row: {
+          aca_hash_key: string
+          aca_payload: Json
+          action_id: string
+          created_at: string | null
+          id: string
+          user_id: string
+        }
+        Insert: {
+          aca_hash_key: string
+          aca_payload: Json
+          action_id: string
+          created_at?: string | null
+          id?: string
+          user_id: string
+        }
+        Update: {
+          aca_hash_key?: string
+          aca_payload?: Json
+          action_id?: string
+          created_at?: string | null
+          id?: string
+          user_id?: string
         }
         Relationships: [
           {
-            foreignKeyName: "dao_votes_proposal_id_fkey"
-            columns: ["proposal_id"]
+            foreignKeyName: "dao_vetoes_action_id_fkey"
+            columns: ["action_id"]
             isOneToOne: false
-            referencedRelation: "dao_proposals"
+            referencedRelation: "dao_pending_actions"
             referencedColumns: ["id"]
           },
         ]
+      }
+      dao_votes: {
+        Row: {
+          aca_hash_key: string | null
+          aca_payload: Json | null
+          created_at: string | null
+          credits_spent: number
+          id: string
+          proposal_id: string
+          snapshot_block: number | null
+          snapshot_voting_power: number | null
+          user_id: string | null
+          vote_type: string | null
+          vote_weight: number
+        }
+        Insert: {
+          aca_hash_key?: string | null
+          aca_payload?: Json | null
+          created_at?: string | null
+          credits_spent: number
+          id?: string
+          proposal_id: string
+          snapshot_block?: number | null
+          snapshot_voting_power?: number | null
+          user_id?: string | null
+          vote_type?: string | null
+          vote_weight: number
+        }
+        Update: {
+          aca_hash_key?: string | null
+          aca_payload?: Json | null
+          created_at?: string | null
+          credits_spent?: number
+          id?: string
+          proposal_id?: string
+          snapshot_block?: number | null
+          snapshot_voting_power?: number | null
+          user_id?: string | null
+          vote_type?: string | null
+          vote_weight?: number
+        }
+        Relationships: []
       }
       data_connections: {
         Row: {
@@ -1643,6 +2018,13 @@ export type Database = {
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "data_sources_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "member_wallet_directory"
+            referencedColumns: ["user_id"]
+          },
           {
             foreignKeyName: "data_sources_user_id_fkey"
             columns: ["user_id"]
@@ -1810,6 +2192,7 @@ export type Database = {
           code: string
           created_at: string
           id: string
+          label: string
           payload: Json
           status: string
           updated_at: string
@@ -1819,6 +2202,7 @@ export type Database = {
           code: string
           created_at?: string
           id?: string
+          label?: string
           payload: Json
           status?: string
           updated_at?: string
@@ -1828,6 +2212,7 @@ export type Database = {
           code?: string
           created_at?: string
           id?: string
+          label?: string
           payload?: Json
           status?: string
           updated_at?: string
@@ -1872,6 +2257,57 @@ export type Database = {
           status?: string | null
           testnet_address?: string
           token_balance_minted?: number | null
+        }
+        Relationships: []
+      }
+      distribution_jobs: {
+        Row: {
+          batch_size: number
+          batches_completed: number
+          batches_failed: number
+          completed_at: string | null
+          created_at: string
+          error_log: Json | null
+          id: string
+          job_type: string
+          last_processed_index: number
+          started_at: string | null
+          status: string
+          total_investors: number
+          total_tokens_sent: string
+          updated_at: string
+        }
+        Insert: {
+          batch_size?: number
+          batches_completed?: number
+          batches_failed?: number
+          completed_at?: string | null
+          created_at?: string
+          error_log?: Json | null
+          id?: string
+          job_type: string
+          last_processed_index?: number
+          started_at?: string | null
+          status?: string
+          total_investors?: number
+          total_tokens_sent?: string
+          updated_at?: string
+        }
+        Update: {
+          batch_size?: number
+          batches_completed?: number
+          batches_failed?: number
+          completed_at?: string | null
+          created_at?: string
+          error_log?: Json | null
+          id?: string
+          job_type?: string
+          last_processed_index?: number
+          started_at?: string | null
+          status?: string
+          total_investors?: number
+          total_tokens_sent?: string
+          updated_at?: string
         }
         Relationships: []
       }
@@ -1947,6 +2383,9 @@ export type Database = {
           intent_type: string | null
           liability_token_hash: string | null
           manifest_hashes: string[] | null
+          metadata: Json | null
+          nft_mint_note: string | null
+          nft_minted: boolean | null
           on_chain_status: string | null
           on_chain_tx_hash: string | null
           pseudo_user_id: string | null
@@ -1980,6 +2419,9 @@ export type Database = {
           intent_type?: string | null
           liability_token_hash?: string | null
           manifest_hashes?: string[] | null
+          metadata?: Json | null
+          nft_mint_note?: string | null
+          nft_minted?: boolean | null
           on_chain_status?: string | null
           on_chain_tx_hash?: string | null
           pseudo_user_id?: string | null
@@ -2013,6 +2455,9 @@ export type Database = {
           intent_type?: string | null
           liability_token_hash?: string | null
           manifest_hashes?: string[] | null
+          metadata?: Json | null
+          nft_mint_note?: string | null
+          nft_minted?: boolean | null
           on_chain_status?: string | null
           on_chain_tx_hash?: string | null
           pseudo_user_id?: string | null
@@ -2253,6 +2698,7 @@ export type Database = {
           hourly_rate: number | null
           id: string
           is_ephemeral: boolean
+          job_title: string | null
           last_login: string | null
           name: string
           notes: string | null
@@ -2286,6 +2732,7 @@ export type Database = {
           hourly_rate?: number | null
           id?: string
           is_ephemeral?: boolean
+          job_title?: string | null
           last_login?: string | null
           name: string
           notes?: string | null
@@ -2319,6 +2766,7 @@ export type Database = {
           hourly_rate?: number | null
           id?: string
           is_ephemeral?: boolean
+          job_title?: string | null
           last_login?: string | null
           name?: string
           notes?: string | null
@@ -2369,7 +2817,21 @@ export type Database = {
             foreignKeyName: "endorsements_endorsee_id_fkey"
             columns: ["endorsee_id"]
             isOneToOne: false
+            referencedRelation: "member_wallet_directory"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "endorsements_endorsee_id_fkey"
+            columns: ["endorsee_id"]
+            isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "endorsements_endorser_id_fkey"
+            columns: ["endorser_id"]
+            isOneToOne: false
+            referencedRelation: "member_wallet_directory"
             referencedColumns: ["user_id"]
           },
           {
@@ -2551,6 +3013,39 @@ export type Database = {
         }
         Relationships: []
       }
+      focus_modes: {
+        Row: {
+          created_at: string
+          id: string
+          is_active: boolean
+          label: string
+          quiet_hours_end: string
+          quiet_hours_start: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          label: string
+          quiet_hours_end?: string
+          quiet_hours_start?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          label?: string
+          quiet_hours_end?: string
+          quiet_hours_start?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       franchise_agreements: {
         Row: {
           agreement_end_date: string | null
@@ -2635,7 +3130,21 @@ export type Database = {
             foreignKeyName: "friends_user_id_1_fkey"
             columns: ["user_id_1"]
             isOneToOne: false
+            referencedRelation: "member_wallet_directory"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "friends_user_id_1_fkey"
+            columns: ["user_id_1"]
+            isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "friends_user_id_2_fkey"
+            columns: ["user_id_2"]
+            isOneToOne: false
+            referencedRelation: "member_wallet_directory"
             referencedColumns: ["user_id"]
           },
           {
@@ -2646,6 +3155,93 @@ export type Database = {
             referencedColumns: ["user_id"]
           },
         ]
+      }
+      funding_contributions: {
+        Row: {
+          block_number: number
+          created_at: string
+          id: string
+          investor_address: string
+          log_index: number
+          total_contributed: number
+          tx_hash: string
+          usdc_amount: number
+          usdc_amount_raw: string
+        }
+        Insert: {
+          block_number: number
+          created_at?: string
+          id?: string
+          investor_address: string
+          log_index?: number
+          total_contributed: number
+          tx_hash: string
+          usdc_amount: number
+          usdc_amount_raw: string
+        }
+        Update: {
+          block_number?: number
+          created_at?: string
+          id?: string
+          investor_address?: string
+          log_index?: number
+          total_contributed?: number
+          tx_hash?: string
+          usdc_amount?: number
+          usdc_amount_raw?: string
+        }
+        Relationships: []
+      }
+      funding_distributions: {
+        Row: {
+          block_number: number
+          created_at: string
+          id: string
+          immediate_amount: string
+          investor_address: string
+          investor_index: number
+          tx_hash: string
+          vesting_amount: string
+        }
+        Insert: {
+          block_number: number
+          created_at?: string
+          id?: string
+          immediate_amount: string
+          investor_address: string
+          investor_index: number
+          tx_hash: string
+          vesting_amount: string
+        }
+        Update: {
+          block_number?: number
+          created_at?: string
+          id?: string
+          immediate_amount?: string
+          investor_address?: string
+          investor_index?: number
+          tx_hash?: string
+          vesting_amount?: string
+        }
+        Relationships: []
+      }
+      funding_indexer_state: {
+        Row: {
+          id: string
+          last_scanned_block: number
+          updated_at: string
+        }
+        Insert: {
+          id: string
+          last_scanned_block?: number
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          last_scanned_block?: number
+          updated_at?: string
+        }
+        Relationships: []
       }
       geospatial_analytics: {
         Row: {
@@ -2909,7 +3505,21 @@ export type Database = {
             foreignKeyName: "good_deeds_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
+            referencedRelation: "member_wallet_directory"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "good_deeds_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "good_deeds_verified_by_fkey"
+            columns: ["verified_by"]
+            isOneToOne: false
+            referencedRelation: "member_wallet_directory"
             referencedColumns: ["user_id"]
           },
           {
@@ -2921,35 +3531,226 @@ export type Database = {
           },
         ]
       }
+      governance_indexer_state: {
+        Row: {
+          id: string
+          last_scanned_block: number
+          network: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          last_scanned_block?: number
+          network?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          last_scanned_block?: number
+          network?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       governance_ledger: {
         Row: {
+          aca_hash_key: string | null
+          action_type: string | null
+          actor_id: string | null
           amount: number
           created_at: string | null
           description: string | null
           id: string
+          metadata: Json | null
           on_chain_tx_hash: string | null
+          target_id: string | null
+          target_table: string | null
           transaction_type: string
           user_id: string
         }
         Insert: {
+          aca_hash_key?: string | null
+          action_type?: string | null
+          actor_id?: string | null
           amount: number
           created_at?: string | null
           description?: string | null
           id?: string
+          metadata?: Json | null
           on_chain_tx_hash?: string | null
+          target_id?: string | null
+          target_table?: string | null
           transaction_type: string
           user_id: string
         }
         Update: {
+          aca_hash_key?: string | null
+          action_type?: string | null
+          actor_id?: string | null
           amount?: number
           created_at?: string | null
           description?: string | null
           id?: string
+          metadata?: Json | null
           on_chain_tx_hash?: string | null
+          target_id?: string | null
+          target_table?: string | null
           transaction_type?: string
           user_id?: string
         }
         Relationships: []
+      }
+      governance_proposals: {
+        Row: {
+          abstain_votes: string
+          against_votes: string
+          block_created: number
+          calldatas: Json
+          callvalues: Json
+          created_at: string
+          description: string
+          for_votes: string
+          network: string
+          proposal_id: string
+          proposer: string
+          state: number
+          state_name: string
+          targets: Json
+          title: string
+          tx_hash: string | null
+          updated_at: string
+          vote_end: number
+          vote_start: number
+        }
+        Insert: {
+          abstain_votes?: string
+          against_votes?: string
+          block_created?: number
+          calldatas?: Json
+          callvalues?: Json
+          created_at?: string
+          description?: string
+          for_votes?: string
+          network?: string
+          proposal_id: string
+          proposer: string
+          state?: number
+          state_name?: string
+          targets?: Json
+          title?: string
+          tx_hash?: string | null
+          updated_at?: string
+          vote_end?: number
+          vote_start?: number
+        }
+        Update: {
+          abstain_votes?: string
+          against_votes?: string
+          block_created?: number
+          calldatas?: Json
+          callvalues?: Json
+          created_at?: string
+          description?: string
+          for_votes?: string
+          network?: string
+          proposal_id?: string
+          proposer?: string
+          state?: number
+          state_name?: string
+          targets?: Json
+          title?: string
+          tx_hash?: string | null
+          updated_at?: string
+          vote_end?: number
+          vote_start?: number
+        }
+        Relationships: []
+      }
+      hat_recall_petitions: {
+        Row: {
+          aca_hash_key: string
+          closed_at: string | null
+          id: string
+          opened_at: string
+          petitioner_id: string
+          reason: string
+          signature_count: number
+          status: string
+          target_hat_id: string
+          threshold: number
+        }
+        Insert: {
+          aca_hash_key: string
+          closed_at?: string | null
+          id?: string
+          opened_at?: string
+          petitioner_id: string
+          reason: string
+          signature_count?: number
+          status?: string
+          target_hat_id: string
+          threshold?: number
+        }
+        Update: {
+          aca_hash_key?: string
+          closed_at?: string | null
+          id?: string
+          opened_at?: string
+          petitioner_id?: string
+          reason?: string
+          signature_count?: number
+          status?: string
+          target_hat_id?: string
+          threshold?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hat_recall_petitions_target_hat_id_fkey"
+            columns: ["target_hat_id"]
+            isOneToOne: false
+            referencedRelation: "dao_hats"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hat_recall_signatures: {
+        Row: {
+          aca_hash_key: string
+          created_at: string
+          id: string
+          petition_id: string
+          signer_id: string
+        }
+        Insert: {
+          aca_hash_key: string
+          created_at?: string
+          id?: string
+          petition_id: string
+          signer_id: string
+        }
+        Update: {
+          aca_hash_key?: string
+          created_at?: string
+          id?: string
+          petition_id?: string
+          signer_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hat_recall_signatures_petition_id_fkey"
+            columns: ["petition_id"]
+            isOneToOne: false
+            referencedRelation: "hat_recall_petitions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hat_recall_signatures_petition_id_fkey"
+            columns: ["petition_id"]
+            isOneToOne: false
+            referencedRelation: "hat_recall_petitions_public"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       health_metrics: {
         Row: {
@@ -3062,33 +3863,152 @@ export type Database = {
         }
         Relationships: []
       }
-      idia_life_accounts: {
+      hub_notifications: {
         Row: {
-          created_at: string | null
+          body: string | null
+          category: string
+          created_at: string
           id: string
-          last_deposit_at: string | null
-          liquid_balance: number | null
-          pseudo_user_id: string
-          total_earned: number | null
-          updated_at: string | null
+          link: string | null
+          metadata: Json
+          read_at: string | null
+          severity: string
+          title: string
+          user_id: string
         }
         Insert: {
-          created_at?: string | null
+          body?: string | null
+          category?: string
+          created_at?: string
           id?: string
-          last_deposit_at?: string | null
-          liquid_balance?: number | null
-          pseudo_user_id: string
-          total_earned?: number | null
-          updated_at?: string | null
+          link?: string | null
+          metadata?: Json
+          read_at?: string | null
+          severity?: string
+          title: string
+          user_id: string
         }
         Update: {
-          created_at?: string | null
+          body?: string | null
+          category?: string
+          created_at?: string
           id?: string
-          last_deposit_at?: string | null
-          liquid_balance?: number | null
-          pseudo_user_id?: string
-          total_earned?: number | null
+          link?: string | null
+          metadata?: Json
+          read_at?: string | null
+          severity?: string
+          title?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      idia_schema_manifest_vault: {
+        Row: {
+          business_id: string
+          created_at: string
+          id: string
+          pairing_code: string
+          schema_payload: Json
+          updated_at: string
+        }
+        Insert: {
+          business_id: string
+          created_at?: string
+          id?: string
+          pairing_code: string
+          schema_payload: Json
+          updated_at?: string
+        }
+        Update: {
+          business_id?: string
+          created_at?: string
+          id?: string
+          pairing_code?: string
+          schema_payload?: Json
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "idia_schema_manifest_vault_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      indexer_cursor: {
+        Row: {
+          chain_id: number
+          last_block: number
+          updated_at: string
+        }
+        Insert: {
+          chain_id: number
+          last_block?: number
+          updated_at?: string
+        }
+        Update: {
+          chain_id?: number
+          last_block?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      insights_cache: {
+        Row: {
+          created_at: string
+          generated_at: string
+          id: string
+          model: string
+          payload: Json
+          source_hash: string
+          tier: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          generated_at?: string
+          id?: string
+          model: string
+          payload: Json
+          source_hash: string
+          tier: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          generated_at?: string
+          id?: string
+          model?: string
+          payload?: Json
+          source_hash?: string
+          tier?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      intent_discovery_sessions: {
+        Row: {
+          history: Json | null
+          resolved_sub_module_id: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          history?: Json | null
+          resolved_sub_module_id?: string | null
           updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          history?: Json | null
+          resolved_sub_module_id?: string | null
+          updated_at?: string | null
+          user_id?: string
         }
         Relationships: []
       }
@@ -3205,6 +4125,54 @@ export type Database = {
             columns: ["warehouse_bin_id"]
             isOneToOne: false
             referencedRelation: "warehouse_bins"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      inventory_demand: {
+        Row: {
+          business_id: string
+          created_by: string | null
+          fulfilled_at: string | null
+          id: string
+          inventory_item_id: string
+          quantity_needed: number
+          requested_at: string
+          status: string
+        }
+        Insert: {
+          business_id: string
+          created_by?: string | null
+          fulfilled_at?: string | null
+          id?: string
+          inventory_item_id: string
+          quantity_needed?: number
+          requested_at?: string
+          status?: string
+        }
+        Update: {
+          business_id?: string
+          created_by?: string | null
+          fulfilled_at?: string | null
+          id?: string
+          inventory_item_id?: string
+          quantity_needed?: number
+          requested_at?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inventory_demand_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inventory_demand_inventory_item_id_fkey"
+            columns: ["inventory_item_id"]
+            isOneToOne: false
+            referencedRelation: "inventory_items"
             referencedColumns: ["id"]
           },
         ]
@@ -3392,6 +4360,66 @@ export type Database = {
           },
         ]
       }
+      inventory_variances: {
+        Row: {
+          actual_yield: number
+          batch_id: string
+          business_id: string
+          created_at: string
+          created_by: string | null
+          id: string
+          inventory_item_id: string | null
+          item_name: string
+          location_id: string | null
+          resolved_at: string | null
+          status: string
+          theoretical_yield: number
+          tolerance_threshold: number
+          unit: string
+          unit_cost: number
+          value_lost: number | null
+          variance_amount: number | null
+        }
+        Insert: {
+          actual_yield: number
+          batch_id: string
+          business_id: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          inventory_item_id?: string | null
+          item_name: string
+          location_id?: string | null
+          resolved_at?: string | null
+          status?: string
+          theoretical_yield: number
+          tolerance_threshold?: number
+          unit?: string
+          unit_cost?: number
+          value_lost?: number | null
+          variance_amount?: number | null
+        }
+        Update: {
+          actual_yield?: number
+          batch_id?: string
+          business_id?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          inventory_item_id?: string | null
+          item_name?: string
+          location_id?: string | null
+          resolved_at?: string | null
+          status?: string
+          theoretical_yield?: number
+          tolerance_threshold?: number
+          unit?: string
+          unit_cost?: number
+          value_lost?: number | null
+          variance_amount?: number | null
+        }
+        Relationships: []
+      }
       invoice_line_items: {
         Row: {
           created_at: string | null
@@ -3550,6 +4578,13 @@ export type Database = {
           version?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "legal_agreements_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "member_wallet_directory"
+            referencedColumns: ["user_id"]
+          },
           {
             foreignKeyName: "legal_agreements_user_id_fkey"
             columns: ["user_id"]
@@ -3952,6 +4987,66 @@ export type Database = {
         }
         Relationships: []
       }
+      mcp_manifests: {
+        Row: {
+          tools: Json
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          tools?: Json
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          tools?: Json
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      mcp_relay_events: {
+        Row: {
+          created_at: string
+          duration_ms: number | null
+          error_code: number | null
+          error_message: string | null
+          id: number
+          parent_span_id: string | null
+          sanitized_args: Json | null
+          status: string
+          tool_name: string
+          trace_id: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          duration_ms?: number | null
+          error_code?: number | null
+          error_message?: string | null
+          id?: number
+          parent_span_id?: string | null
+          sanitized_args?: Json | null
+          status: string
+          tool_name: string
+          trace_id?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          duration_ms?: number | null
+          error_code?: number | null
+          error_message?: string | null
+          id?: number
+          parent_span_id?: string | null
+          sanitized_args?: Json | null
+          status?: string
+          tool_name?: string
+          trace_id?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       menu_history: {
         Row: {
           action: string
@@ -4003,6 +5098,7 @@ export type Database = {
           is_active: boolean | null
           is_locked: boolean | null
           menu_status: string | null
+          modifier_groups: Json
           name: string
           preparation_time: number | null
           promotion_eligible: boolean | null
@@ -4028,6 +5124,7 @@ export type Database = {
           is_active?: boolean | null
           is_locked?: boolean | null
           menu_status?: string | null
+          modifier_groups?: Json
           name: string
           preparation_time?: number | null
           promotion_eligible?: boolean | null
@@ -4053,6 +5150,7 @@ export type Database = {
           is_active?: boolean | null
           is_locked?: boolean | null
           menu_status?: string | null
+          modifier_groups?: Json
           name?: string
           preparation_time?: number | null
           promotion_eligible?: boolean | null
@@ -4134,6 +5232,54 @@ export type Database = {
           },
         ]
       }
+      merchant_terminals: {
+        Row: {
+          business_id: string
+          created_at: string
+          id: string
+          last_seen_at: string | null
+          location_id: string | null
+          name: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          business_id: string
+          created_at?: string
+          id?: string
+          last_seen_at?: string | null
+          location_id?: string | null
+          name: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          business_id?: string
+          created_at?: string
+          id?: string
+          last_seen_at?: string | null
+          location_id?: string | null
+          name?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "merchant_terminals_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "merchant_terminals_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "business_locations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       nfc_transactions: {
         Row: {
           blockchain_hash: string | null
@@ -4183,6 +5329,45 @@ export type Database = {
             columns: ["transaction_id"]
             isOneToOne: false
             referencedRelation: "pos_transactions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      organization_capabilities: {
+        Row: {
+          capability_key: string
+          granted_at: string | null
+          guid: string | null
+          id: string
+          org_id: string | null
+        }
+        Insert: {
+          capability_key: string
+          granted_at?: string | null
+          guid?: string | null
+          id?: string
+          org_id?: string | null
+        }
+        Update: {
+          capability_key?: string
+          granted_at?: string | null
+          guid?: string | null
+          id?: string
+          org_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organization_capabilities_guid_fkey"
+            columns: ["guid"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "organization_capabilities_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
             referencedColumns: ["id"]
           },
         ]
@@ -4254,6 +5439,48 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      pending_nft_mints: {
+        Row: {
+          aca_hashes: string[]
+          bundle_ref: string | null
+          buyer_id: string | null
+          created_at: string
+          egress_id: string
+          id: string
+          liability_token_hash: string | null
+          minted_at: string | null
+          owner_guid: string
+          status: string
+          tx_hash: string | null
+        }
+        Insert: {
+          aca_hashes: string[]
+          bundle_ref?: string | null
+          buyer_id?: string | null
+          created_at?: string
+          egress_id: string
+          id?: string
+          liability_token_hash?: string | null
+          minted_at?: string | null
+          owner_guid: string
+          status?: string
+          tx_hash?: string | null
+        }
+        Update: {
+          aca_hashes?: string[]
+          bundle_ref?: string | null
+          buyer_id?: string | null
+          created_at?: string
+          egress_id?: string
+          id?: string
+          liability_token_hash?: string | null
+          minted_at?: string | null
+          owner_guid?: string
+          status?: string
+          tx_hash?: string | null
+        }
+        Relationships: []
       }
       performance_metrics: {
         Row: {
@@ -4469,9 +5696,49 @@ export type Database = {
         }
         Relationships: []
       }
+      platform_users: {
+        Row: {
+          created_at: string | null
+          hub_account_type: string | null
+          hub_saas_tier: string | null
+          platform_role: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          hub_account_type?: string | null
+          hub_saas_tier?: string | null
+          platform_role?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          hub_account_type?: string | null
+          hub_saas_tier?: string | null
+          platform_role?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "platform_users_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "member_wallet_directory"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "platform_users_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
       pos_transactions: {
         Row: {
           ar_experience_id: string | null
+          business_id: string | null
           cashier_id: string | null
           created_at: string | null
           customer_id: string | null
@@ -4479,6 +5746,7 @@ export type Database = {
           id: string
           idia_usd_amount: number | null
           initiated_via_ar: boolean | null
+          items: Json | null
           location_id: string
           loyalty_points_earned: number | null
           nfc_payload: Json | null
@@ -4496,6 +5764,7 @@ export type Database = {
         }
         Insert: {
           ar_experience_id?: string | null
+          business_id?: string | null
           cashier_id?: string | null
           created_at?: string | null
           customer_id?: string | null
@@ -4503,6 +5772,7 @@ export type Database = {
           id?: string
           idia_usd_amount?: number | null
           initiated_via_ar?: boolean | null
+          items?: Json | null
           location_id: string
           loyalty_points_earned?: number | null
           nfc_payload?: Json | null
@@ -4520,6 +5790,7 @@ export type Database = {
         }
         Update: {
           ar_experience_id?: string | null
+          business_id?: string | null
           cashier_id?: string | null
           created_at?: string | null
           customer_id?: string | null
@@ -4527,6 +5798,7 @@ export type Database = {
           id?: string
           idia_usd_amount?: number | null
           initiated_via_ar?: boolean | null
+          items?: Json | null
           location_id?: string
           loyalty_points_earned?: number | null
           nfc_payload?: Json | null
@@ -4589,7 +5861,21 @@ export type Database = {
             foreignKeyName: "praises_praised_id_fkey"
             columns: ["praised_id"]
             isOneToOne: false
+            referencedRelation: "member_wallet_directory"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "praises_praised_id_fkey"
+            columns: ["praised_id"]
+            isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "praises_praiser_id_fkey"
+            columns: ["praiser_id"]
+            isOneToOne: false
+            referencedRelation: "member_wallet_directory"
             referencedColumns: ["user_id"]
           },
           {
@@ -4670,8 +5956,10 @@ export type Database = {
       profiles: {
         Row: {
           account_type: string | null
+          active_saas_tiers:
+            | Database["public"]["Enums"]["idia_saas_tier"][]
+            | null
           activity_preferences: string[] | null
-          age: number | null
           ai_assistant_name: string | null
           available_credit_line: number | null
           avatar_url: string | null
@@ -4686,6 +5974,7 @@ export type Database = {
           id: string
           interests: string[] | null
           is_501c3_verified: boolean | null
+          is_minor: boolean | null
           is_seed_backed_up: boolean | null
           is_sovereign: boolean | null
           kyc_status: string | null
@@ -4708,8 +5997,10 @@ export type Database = {
         }
         Insert: {
           account_type?: string | null
+          active_saas_tiers?:
+            | Database["public"]["Enums"]["idia_saas_tier"][]
+            | null
           activity_preferences?: string[] | null
-          age?: number | null
           ai_assistant_name?: string | null
           available_credit_line?: number | null
           avatar_url?: string | null
@@ -4724,6 +6015,7 @@ export type Database = {
           id?: string
           interests?: string[] | null
           is_501c3_verified?: boolean | null
+          is_minor?: boolean | null
           is_seed_backed_up?: boolean | null
           is_sovereign?: boolean | null
           kyc_status?: string | null
@@ -4746,8 +6038,10 @@ export type Database = {
         }
         Update: {
           account_type?: string | null
+          active_saas_tiers?:
+            | Database["public"]["Enums"]["idia_saas_tier"][]
+            | null
           activity_preferences?: string[] | null
-          age?: number | null
           ai_assistant_name?: string | null
           available_credit_line?: number | null
           avatar_url?: string | null
@@ -4762,6 +6056,7 @@ export type Database = {
           id?: string
           interests?: string[] | null
           is_501c3_verified?: boolean | null
+          is_minor?: boolean | null
           is_seed_backed_up?: boolean | null
           is_sovereign?: boolean | null
           kyc_status?: string | null
@@ -4846,6 +6141,161 @@ export type Database = {
           },
         ]
       }
+      proposal_comments: {
+        Row: {
+          aca_hash_key: string
+          author_id: string
+          body: string
+          created_at: string
+          edited_at: string | null
+          id: string
+          parent_id: string | null
+          proposal_id: string
+          redacted_at: string | null
+        }
+        Insert: {
+          aca_hash_key: string
+          author_id: string
+          body: string
+          created_at?: string
+          edited_at?: string | null
+          id?: string
+          parent_id?: string | null
+          proposal_id: string
+          redacted_at?: string | null
+        }
+        Update: {
+          aca_hash_key?: string
+          author_id?: string
+          body?: string
+          created_at?: string
+          edited_at?: string | null
+          id?: string
+          parent_id?: string | null
+          proposal_id?: string
+          redacted_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "proposal_comments_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "proposal_comments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "proposal_comments_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "proposal_comments_public"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "proposal_comments_proposal_id_fkey"
+            columns: ["proposal_id"]
+            isOneToOne: false
+            referencedRelation: "dao_proposals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "proposal_comments_proposal_id_fkey"
+            columns: ["proposal_id"]
+            isOneToOne: false
+            referencedRelation: "dao_proposals_public"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      proposal_signatures: {
+        Row: {
+          aca_hash_key: string
+          created_at: string
+          id: string
+          proposal_id: string
+          signature_type: string
+          signer_id: string
+        }
+        Insert: {
+          aca_hash_key: string
+          created_at?: string
+          id?: string
+          proposal_id: string
+          signature_type: string
+          signer_id: string
+        }
+        Update: {
+          aca_hash_key?: string
+          created_at?: string
+          id?: string
+          proposal_id?: string
+          signature_type?: string
+          signer_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "proposal_signatures_proposal_id_fkey"
+            columns: ["proposal_id"]
+            isOneToOne: false
+            referencedRelation: "dao_proposals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "proposal_signatures_proposal_id_fkey"
+            columns: ["proposal_id"]
+            isOneToOne: false
+            referencedRelation: "dao_proposals_public"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      protocol_events: {
+        Row: {
+          block_number: number
+          block_timestamp: string | null
+          contract_address: string
+          contract_name: string
+          decoded_args: Json
+          event_name: string
+          event_signature: string
+          id: number
+          indexed_at: string
+          log_index: number
+          raw_data: string | null
+          raw_topics: string[]
+          tx_hash: string
+        }
+        Insert: {
+          block_number: number
+          block_timestamp?: string | null
+          contract_address: string
+          contract_name: string
+          decoded_args?: Json
+          event_name: string
+          event_signature: string
+          id?: number
+          indexed_at?: string
+          log_index: number
+          raw_data?: string | null
+          raw_topics?: string[]
+          tx_hash: string
+        }
+        Update: {
+          block_number?: number
+          block_timestamp?: string | null
+          contract_address?: string
+          contract_name?: string
+          decoded_args?: Json
+          event_name?: string
+          event_signature?: string
+          id?: number
+          indexed_at?: string
+          log_index?: number
+          raw_data?: string | null
+          raw_topics?: string[]
+          tx_hash?: string
+        }
+        Relationships: []
+      }
       pulse_survey_responses: {
         Row: {
           created_at: string | null
@@ -4878,6 +6328,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "pulse_surveys"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pulse_survey_responses_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "member_wallet_directory"
+            referencedColumns: ["user_id"]
           },
           {
             foreignKeyName: "pulse_survey_responses_user_id_fkey"
@@ -4920,6 +6377,13 @@ export type Database = {
           title?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "pulse_surveys_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "member_wallet_directory"
+            referencedColumns: ["user_id"]
+          },
           {
             foreignKeyName: "pulse_surveys_created_by_fkey"
             columns: ["created_by"]
@@ -4994,6 +6458,8 @@ export type Database = {
           created_by: string | null
           expected_delivery_date: string | null
           id: string
+          invoice_amount: number | null
+          invoice_status: string | null
           location_id: string
           notes: string | null
           order_date: string
@@ -5011,6 +6477,8 @@ export type Database = {
           created_by?: string | null
           expected_delivery_date?: string | null
           id?: string
+          invoice_amount?: number | null
+          invoice_status?: string | null
           location_id: string
           notes?: string | null
           order_date?: string
@@ -5028,6 +6496,8 @@ export type Database = {
           created_by?: string | null
           expected_delivery_date?: string | null
           id?: string
+          invoice_amount?: number | null
+          invoice_status?: string | null
           location_id?: string
           notes?: string | null
           order_date?: string
@@ -5037,6 +6507,33 @@ export type Database = {
           supplier_name?: string
           total_amount?: number | null
           updated_at?: string | null
+        }
+        Relationships: []
+      }
+      push_tokens: {
+        Row: {
+          created_at: string
+          id: string
+          platform: string
+          token: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          platform: string
+          token: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          platform?: string
+          token?: string
+          updated_at?: string
+          user_id?: string
         }
         Relationships: []
       }
@@ -5608,6 +7105,48 @@ export type Database = {
         }
         Relationships: []
       }
+      settlement_locks: {
+        Row: {
+          lock_key: string
+          locked_at: string
+          run_id: string
+        }
+        Insert: {
+          lock_key: string
+          locked_at?: string
+          run_id: string
+        }
+        Update: {
+          lock_key?: string
+          locked_at?: string
+          run_id?: string
+        }
+        Relationships: []
+      }
+      settlement_queue: {
+        Row: {
+          created_at: string | null
+          id: string
+          payload: Json
+          reference_id: string
+          status: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          payload: Json
+          reference_id: string
+          status?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          payload?: Json
+          reference_id?: string
+          status?: string | null
+        }
+        Relationships: []
+      }
       shipment_line_items: {
         Row: {
           created_at: string | null
@@ -5752,6 +7291,13 @@ export type Database = {
             foreignKeyName: "social_analytics_consent_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: true
+            referencedRelation: "member_wallet_directory"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "social_analytics_consent_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
             referencedRelation: "profiles"
             referencedColumns: ["user_id"]
           },
@@ -5786,6 +7332,13 @@ export type Database = {
           weekly_interactions_count?: number | null
         }
         Relationships: [
+          {
+            foreignKeyName: "social_health_metrics_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "member_wallet_directory"
+            referencedColumns: ["user_id"]
+          },
           {
             foreignKeyName: "social_health_metrics_user_id_fkey"
             columns: ["user_id"]
@@ -6127,11 +7680,10 @@ export type Database = {
       synapse_credit_ledger: {
         Row: {
           amount: number
-          amount_idia_beta: number | null
           amount_idia_usd: number | null
+          amount_usdc: number | null
           balance_after: number | null
           balance_fiat_usd: number | null
-          balance_idia_beta: number | null
           balance_previous: number | null
           balance_usdc_stable: number | null
           blockchain_tx_hash: string | null
@@ -6159,11 +7711,10 @@ export type Database = {
         }
         Insert: {
           amount: number
-          amount_idia_beta?: number | null
           amount_idia_usd?: number | null
+          amount_usdc?: number | null
           balance_after?: number | null
           balance_fiat_usd?: number | null
-          balance_idia_beta?: number | null
           balance_previous?: number | null
           balance_usdc_stable?: number | null
           blockchain_tx_hash?: string | null
@@ -6191,11 +7742,10 @@ export type Database = {
         }
         Update: {
           amount?: number
-          amount_idia_beta?: number | null
           amount_idia_usd?: number | null
+          amount_usdc?: number | null
           balance_after?: number | null
           balance_fiat_usd?: number | null
-          balance_idia_beta?: number | null
           balance_previous?: number | null
           balance_usdc_stable?: number | null
           blockchain_tx_hash?: string | null
@@ -6250,6 +7800,33 @@ export type Database = {
           sync_results?: Json | null
           sync_type?: string
           total_connections?: number
+        }
+        Relationships: []
+      }
+      system_configs: {
+        Row: {
+          created_at: string | null
+          description: string | null
+          id: string
+          key: string
+          updated_at: string | null
+          value: string
+        }
+        Insert: {
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          key: string
+          updated_at?: string | null
+          value: string
+        }
+        Update: {
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          key?: string
+          updated_at?: string | null
+          value?: string
         }
         Relationships: []
       }
@@ -6514,6 +8091,13 @@ export type Database = {
             foreignKeyName: "trust_circle_members_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
+            referencedRelation: "member_wallet_directory"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "trust_circle_members_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["user_id"]
           },
@@ -6548,6 +8132,13 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "trust_circles_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "member_wallet_directory"
+            referencedColumns: ["user_id"]
+          },
           {
             foreignKeyName: "trust_circles_owner_id_fkey"
             columns: ["owner_id"]
@@ -6709,33 +8300,108 @@ export type Database = {
         }
         Relationships: []
       }
+      usdc_payments: {
+        Row: {
+          aca_hash: string | null
+          amount_raw: string
+          amount_usdc: number
+          block_number: number | null
+          chain_id: number
+          created_at: string | null
+          error_message: string | null
+          id: string
+          merchant_id: string | null
+          merchant_name: string | null
+          network: string
+          nonce_used: string | null
+          recipient_address: string
+          reference: string | null
+          relayed_by: string | null
+          sender_address: string
+          settled_at: string | null
+          status: string
+          tx_hash: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          aca_hash?: string | null
+          amount_raw: string
+          amount_usdc: number
+          block_number?: number | null
+          chain_id?: number
+          created_at?: string | null
+          error_message?: string | null
+          id?: string
+          merchant_id?: string | null
+          merchant_name?: string | null
+          network?: string
+          nonce_used?: string | null
+          recipient_address: string
+          reference?: string | null
+          relayed_by?: string | null
+          sender_address: string
+          settled_at?: string | null
+          status?: string
+          tx_hash?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          aca_hash?: string | null
+          amount_raw?: string
+          amount_usdc?: number
+          block_number?: number | null
+          chain_id?: number
+          created_at?: string | null
+          error_message?: string | null
+          id?: string
+          merchant_id?: string | null
+          merchant_name?: string | null
+          network?: string
+          nonce_used?: string | null
+          recipient_address?: string
+          reference?: string | null
+          relayed_by?: string | null
+          sender_address?: string
+          settled_at?: string | null
+          status?: string
+          tx_hash?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       user_aca_records: {
         Row: {
           aca_hash_key: string
           consent_scope: string[]
           consent_type: string | null
+          consumed_at: string | null
           created_at: string | null
           id: string
           platform_guid: string
           source_id: string
+          tx_hash: string | null
         }
         Insert: {
           aca_hash_key: string
           consent_scope?: string[]
           consent_type?: string | null
+          consumed_at?: string | null
           created_at?: string | null
           id?: string
           platform_guid: string
           source_id?: string
+          tx_hash?: string | null
         }
         Update: {
           aca_hash_key?: string
           consent_scope?: string[]
           consent_type?: string | null
+          consumed_at?: string | null
           created_at?: string | null
           id?: string
           platform_guid?: string
           source_id?: string
+          tx_hash?: string | null
         }
         Relationships: [
           {
@@ -6809,6 +8475,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "interests"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_interests_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "member_wallet_directory"
+            referencedColumns: ["user_id"]
           },
           {
             foreignKeyName: "user_interests_user_id_fkey"
@@ -6943,11 +8616,25 @@ export type Database = {
           colorblind_mode: boolean | null
           created_at: string | null
           data_sharing_consent: boolean | null
+          email_reports: boolean | null
           font_size: string | null
           high_contrast: boolean | null
           id: string
+          in_app_alerts: boolean | null
+          in_app_sounds: boolean | null
           marketing_emails: boolean | null
+          privacy_bluetooth: boolean | null
+          privacy_camera: boolean | null
+          privacy_health: boolean | null
+          privacy_microphone: boolean | null
+          privacy_motion: boolean | null
+          privacy_nfc: boolean | null
+          push_activity: boolean | null
+          push_insights: boolean | null
           push_notifications: boolean | null
+          quiet_hours_enabled: boolean | null
+          quiet_hours_end: string | null
+          quiet_hours_start: string | null
           theme_preference: string | null
           updated_at: string | null
           user_id: string
@@ -6956,11 +8643,25 @@ export type Database = {
           colorblind_mode?: boolean | null
           created_at?: string | null
           data_sharing_consent?: boolean | null
+          email_reports?: boolean | null
           font_size?: string | null
           high_contrast?: boolean | null
           id?: string
+          in_app_alerts?: boolean | null
+          in_app_sounds?: boolean | null
           marketing_emails?: boolean | null
+          privacy_bluetooth?: boolean | null
+          privacy_camera?: boolean | null
+          privacy_health?: boolean | null
+          privacy_microphone?: boolean | null
+          privacy_motion?: boolean | null
+          privacy_nfc?: boolean | null
+          push_activity?: boolean | null
+          push_insights?: boolean | null
           push_notifications?: boolean | null
+          quiet_hours_enabled?: boolean | null
+          quiet_hours_end?: string | null
+          quiet_hours_start?: string | null
           theme_preference?: string | null
           updated_at?: string | null
           user_id: string
@@ -6969,11 +8670,25 @@ export type Database = {
           colorblind_mode?: boolean | null
           created_at?: string | null
           data_sharing_consent?: boolean | null
+          email_reports?: boolean | null
           font_size?: string | null
           high_contrast?: boolean | null
           id?: string
+          in_app_alerts?: boolean | null
+          in_app_sounds?: boolean | null
           marketing_emails?: boolean | null
+          privacy_bluetooth?: boolean | null
+          privacy_camera?: boolean | null
+          privacy_health?: boolean | null
+          privacy_microphone?: boolean | null
+          privacy_motion?: boolean | null
+          privacy_nfc?: boolean | null
+          push_activity?: boolean | null
+          push_insights?: boolean | null
           push_notifications?: boolean | null
+          quiet_hours_enabled?: boolean | null
+          quiet_hours_end?: string | null
+          quiet_hours_start?: string | null
           theme_preference?: string | null
           updated_at?: string | null
           user_id?: string
@@ -7079,6 +8794,149 @@ export type Database = {
         }
         Relationships: []
       }
+      variance_corrections: {
+        Row: {
+          business_id: string
+          corrective_action: string
+          id: string
+          manager_auth_pin_hash: string
+          reconciled_at: string
+          reconciled_by: string | null
+          root_cause: string
+          variance_id: string
+        }
+        Insert: {
+          business_id: string
+          corrective_action: string
+          id?: string
+          manager_auth_pin_hash: string
+          reconciled_at?: string
+          reconciled_by?: string | null
+          root_cause: string
+          variance_id: string
+        }
+        Update: {
+          business_id?: string
+          corrective_action?: string
+          id?: string
+          manager_auth_pin_hash?: string
+          reconciled_at?: string
+          reconciled_by?: string | null
+          root_cause?: string
+          variance_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "variance_corrections_variance_id_fkey"
+            columns: ["variance_id"]
+            isOneToOne: false
+            referencedRelation: "inventory_variances"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vesting_pushes: {
+        Row: {
+          amount: string
+          beneficiary_address: string
+          block_number: number
+          created_at: string
+          id: string
+          months_unlocked: number
+          total_claimed: string
+          tx_hash: string
+        }
+        Insert: {
+          amount: string
+          beneficiary_address: string
+          block_number: number
+          created_at?: string
+          id?: string
+          months_unlocked: number
+          total_claimed: string
+          tx_hash: string
+        }
+        Update: {
+          amount?: string
+          beneficiary_address?: string
+          block_number?: number
+          created_at?: string
+          id?: string
+          months_unlocked?: number
+          total_claimed?: string
+          tx_hash?: string
+        }
+        Relationships: []
+      }
+      vulture_provenance_ledger: {
+        Row: {
+          action: string
+          bucket_path: string | null
+          created_at: string
+          error_message: string | null
+          id: string
+          manifest_path: string | null
+          original_file_name: string
+          original_hash: string | null
+          record_count: number | null
+          sanitized_hash: string | null
+          status: string
+        }
+        Insert: {
+          action?: string
+          bucket_path?: string | null
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          manifest_path?: string | null
+          original_file_name: string
+          original_hash?: string | null
+          record_count?: number | null
+          sanitized_hash?: string | null
+          status?: string
+        }
+        Update: {
+          action?: string
+          bucket_path?: string | null
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          manifest_path?: string | null
+          original_file_name?: string
+          original_hash?: string | null
+          record_count?: number | null
+          sanitized_hash?: string | null
+          status?: string
+        }
+        Relationships: []
+      }
+      wallet_provisioning_logs: {
+        Row: {
+          amount_eth: string
+          created_at: string
+          id: string
+          status: string
+          tx_hash: string
+          wallet_address: string
+        }
+        Insert: {
+          amount_eth: string
+          created_at?: string
+          id?: string
+          status?: string
+          tx_hash: string
+          wallet_address: string
+        }
+        Update: {
+          amount_eth?: string
+          created_at?: string
+          id?: string
+          status?: string
+          tx_hash?: string
+          wallet_address?: string
+        }
+        Relationships: []
+      }
       wallets: {
         Row: {
           cash_balance: number | null
@@ -7092,8 +8950,10 @@ export type Database = {
           life_cash_balance: number | null
           platform_guid: string | null
           stablecoin_balance: number | null
+          synapse_gas_credits: number | null
           total_earned: number | null
           updated_at: string | null
+          usdc_balance: number | null
           usdc_last_block: number | null
           usdc_last_synced_at: string | null
           user_id: string
@@ -7111,8 +8971,10 @@ export type Database = {
           life_cash_balance?: number | null
           platform_guid?: string | null
           stablecoin_balance?: number | null
+          synapse_gas_credits?: number | null
           total_earned?: number | null
           updated_at?: string | null
+          usdc_balance?: number | null
           usdc_last_block?: number | null
           usdc_last_synced_at?: string | null
           user_id: string
@@ -7130,14 +8992,23 @@ export type Database = {
           life_cash_balance?: number | null
           platform_guid?: string | null
           stablecoin_balance?: number | null
+          synapse_gas_credits?: number | null
           total_earned?: number | null
           updated_at?: string | null
+          usdc_balance?: number | null
           usdc_last_block?: number | null
           usdc_last_synced_at?: string | null
           user_id?: string
           wallet_address?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "wallets_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "member_wallet_directory"
+            referencedColumns: ["user_id"]
+          },
           {
             foreignKeyName: "wallets_user_id_fkey"
             columns: ["user_id"]
@@ -7304,6 +9175,317 @@ export type Database = {
         }
         Relationships: []
       }
+      committee_applications_public: {
+        Row: {
+          aca_hash_key: string | null
+          aca_payload: Json | null
+          committee_id: string | null
+          created_at: string | null
+          id: string | null
+          masked_owner: string | null
+          risk_flags: Json | null
+          risk_score: number | null
+          sponsor_count: number | null
+          statement_of_competence: string | null
+          status: string | null
+        }
+        Insert: {
+          aca_hash_key?: string | null
+          aca_payload?: Json | null
+          committee_id?: string | null
+          created_at?: string | null
+          id?: string | null
+          masked_owner?: never
+          risk_flags?: Json | null
+          risk_score?: number | null
+          sponsor_count?: number | null
+          statement_of_competence?: string | null
+          status?: string | null
+        }
+        Update: {
+          aca_hash_key?: string | null
+          aca_payload?: Json | null
+          committee_id?: string | null
+          created_at?: string | null
+          id?: string | null
+          masked_owner?: never
+          risk_flags?: Json | null
+          risk_score?: number | null
+          sponsor_count?: number | null
+          statement_of_competence?: string | null
+          status?: string | null
+        }
+        Relationships: []
+      }
+      dao_proposals_public: {
+        Row: {
+          aca_hash_key: string | null
+          aca_payload: Json | null
+          committee_id: string | null
+          committee_quorum_required: number | null
+          created_at: string | null
+          description: string | null
+          end_date: string | null
+          escalated_at: string | null
+          id: string | null
+          lifecycle_phase: string | null
+          masked_author: string | null
+          masked_escalated_by: string | null
+          masked_proposer: string | null
+          on_chain_block: number | null
+          on_chain_id: string | null
+          proposal_calldatas: string[] | null
+          proposal_targets: string[] | null
+          proposal_values: string[] | null
+          quorum_threshold: number | null
+          status: string | null
+          title: string | null
+          tx_hash: string | null
+          vote_type: string | null
+          voting_modality: string | null
+        }
+        Insert: {
+          aca_hash_key?: string | null
+          aca_payload?: Json | null
+          committee_id?: string | null
+          committee_quorum_required?: number | null
+          created_at?: string | null
+          description?: string | null
+          end_date?: string | null
+          escalated_at?: string | null
+          id?: string | null
+          lifecycle_phase?: string | null
+          masked_author?: never
+          masked_escalated_by?: never
+          masked_proposer?: never
+          on_chain_block?: number | null
+          on_chain_id?: string | null
+          proposal_calldatas?: string[] | null
+          proposal_targets?: string[] | null
+          proposal_values?: string[] | null
+          quorum_threshold?: number | null
+          status?: string | null
+          title?: string | null
+          tx_hash?: string | null
+          vote_type?: string | null
+          voting_modality?: string | null
+        }
+        Update: {
+          aca_hash_key?: string | null
+          aca_payload?: Json | null
+          committee_id?: string | null
+          committee_quorum_required?: number | null
+          created_at?: string | null
+          description?: string | null
+          end_date?: string | null
+          escalated_at?: string | null
+          id?: string | null
+          lifecycle_phase?: string | null
+          masked_author?: never
+          masked_escalated_by?: never
+          masked_proposer?: never
+          on_chain_block?: number | null
+          on_chain_id?: string | null
+          proposal_calldatas?: string[] | null
+          proposal_targets?: string[] | null
+          proposal_values?: string[] | null
+          quorum_threshold?: number | null
+          status?: string | null
+          title?: string | null
+          tx_hash?: string | null
+          vote_type?: string | null
+          voting_modality?: string | null
+        }
+        Relationships: []
+      }
+      dao_vetoes_public: {
+        Row: {
+          aca_hash_key: string | null
+          aca_payload: Json | null
+          action_id: string | null
+          created_at: string | null
+          id: string | null
+          masked_owner: string | null
+        }
+        Insert: {
+          aca_hash_key?: string | null
+          aca_payload?: Json | null
+          action_id?: string | null
+          created_at?: string | null
+          id?: string | null
+          masked_owner?: never
+        }
+        Update: {
+          aca_hash_key?: string | null
+          aca_payload?: Json | null
+          action_id?: string | null
+          created_at?: string | null
+          id?: string | null
+          masked_owner?: never
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dao_vetoes_action_id_fkey"
+            columns: ["action_id"]
+            isOneToOne: false
+            referencedRelation: "dao_pending_actions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      dao_votes_public: {
+        Row: {
+          aca_hash_key: string | null
+          aca_payload: Json | null
+          created_at: string | null
+          credits_spent: number | null
+          id: string | null
+          masked_owner: string | null
+          proposal_id: string | null
+          snapshot_block: number | null
+          snapshot_voting_power: number | null
+          vote_type: string | null
+          vote_weight: number | null
+        }
+        Insert: {
+          aca_hash_key?: string | null
+          aca_payload?: Json | null
+          created_at?: string | null
+          credits_spent?: number | null
+          id?: string | null
+          masked_owner?: never
+          proposal_id?: string | null
+          snapshot_block?: number | null
+          snapshot_voting_power?: number | null
+          vote_type?: string | null
+          vote_weight?: number | null
+        }
+        Update: {
+          aca_hash_key?: string | null
+          aca_payload?: Json | null
+          created_at?: string | null
+          credits_spent?: number | null
+          id?: string | null
+          masked_owner?: never
+          proposal_id?: string | null
+          snapshot_block?: number | null
+          snapshot_voting_power?: number | null
+          vote_type?: string | null
+          vote_weight?: number | null
+        }
+        Relationships: []
+      }
+      data_lineage_index_public: {
+        Row: {
+          aca_hash_key: string | null
+          created_at: string | null
+          data_category: string | null
+          source_table: string | null
+        }
+        Insert: {
+          aca_hash_key?: string | null
+          created_at?: string | null
+          data_category?: string | null
+          source_table?: string | null
+        }
+        Update: {
+          aca_hash_key?: string | null
+          created_at?: string | null
+          data_category?: string | null
+          source_table?: string | null
+        }
+        Relationships: []
+      }
+      escrow_distributions: {
+        Row: {
+          amount_wei: string | null
+          approved_by: string | null
+          block_timestamp: string | null
+          escrow: string | null
+          event_name: string | null
+          executor: string | null
+          proposal_id: string | null
+          reason: string | null
+          recipient: string | null
+          tx_hash: string | null
+        }
+        Insert: {
+          amount_wei?: never
+          approved_by?: never
+          block_timestamp?: string | null
+          escrow?: string | null
+          event_name?: string | null
+          executor?: never
+          proposal_id?: never
+          reason?: never
+          recipient?: never
+          tx_hash?: string | null
+        }
+        Update: {
+          amount_wei?: never
+          approved_by?: never
+          block_timestamp?: string | null
+          escrow?: string | null
+          event_name?: string | null
+          executor?: never
+          proposal_id?: never
+          reason?: never
+          recipient?: never
+          tx_hash?: string | null
+        }
+        Relationships: []
+      }
+      escrow_migrations: {
+        Row: {
+          amount_wei: string | null
+          block_timestamp: string | null
+          new_escrow: string | null
+          old_escrow: string | null
+          tx_hash: string | null
+        }
+        Insert: {
+          amount_wei?: never
+          block_timestamp?: string | null
+          new_escrow?: never
+          old_escrow?: string | null
+          tx_hash?: string | null
+        }
+        Update: {
+          amount_wei?: never
+          block_timestamp?: string | null
+          new_escrow?: never
+          old_escrow?: string | null
+          tx_hash?: string | null
+        }
+        Relationships: []
+      }
+      gl_journal_entries: {
+        Row: {
+          account: string | null
+          amount: number | null
+          business_id: string | null
+          created_at: string | null
+          id: string | null
+          metadata: Json | null
+        }
+        Insert: {
+          account?: string | null
+          amount?: never
+          business_id?: never
+          created_at?: string | null
+          id?: string | null
+          metadata?: Json | null
+        }
+        Update: {
+          account?: string | null
+          amount?: never
+          business_id?: never
+          created_at?: string | null
+          id?: string | null
+          metadata?: Json | null
+        }
+        Relationships: []
+      }
       global_reality_manifest: {
         Row: {
           actual_row_count: number | null
@@ -7313,6 +9495,140 @@ export type Database = {
           war_chest_total: number | null
         }
         Relationships: []
+      }
+      governance_ledger_public: {
+        Row: {
+          aca_hash_key: string | null
+          action_type: string | null
+          amount: number | null
+          created_at: string | null
+          description: string | null
+          id: string | null
+          masked_actor: string | null
+          masked_owner: string | null
+          metadata: Json | null
+          on_chain_tx_hash: string | null
+          target_id: string | null
+          target_table: string | null
+          transaction_type: string | null
+        }
+        Insert: {
+          aca_hash_key?: string | null
+          action_type?: string | null
+          amount?: number | null
+          created_at?: string | null
+          description?: string | null
+          id?: string | null
+          masked_actor?: never
+          masked_owner?: never
+          metadata?: Json | null
+          on_chain_tx_hash?: string | null
+          target_id?: string | null
+          target_table?: string | null
+          transaction_type?: string | null
+        }
+        Update: {
+          aca_hash_key?: string | null
+          action_type?: string | null
+          amount?: number | null
+          created_at?: string | null
+          description?: string | null
+          id?: string | null
+          masked_actor?: never
+          masked_owner?: never
+          metadata?: Json | null
+          on_chain_tx_hash?: string | null
+          target_id?: string | null
+          target_table?: string | null
+          transaction_type?: string | null
+        }
+        Relationships: []
+      }
+      hat_recall_petitions_public: {
+        Row: {
+          aca_hash_key: string | null
+          closed_at: string | null
+          id: string | null
+          masked_petitioner: string | null
+          opened_at: string | null
+          reason: string | null
+          signature_count: number | null
+          status: string | null
+          target_hat_id: string | null
+          threshold: number | null
+        }
+        Insert: {
+          aca_hash_key?: string | null
+          closed_at?: string | null
+          id?: string | null
+          masked_petitioner?: never
+          opened_at?: string | null
+          reason?: string | null
+          signature_count?: number | null
+          status?: string | null
+          target_hat_id?: string | null
+          threshold?: number | null
+        }
+        Update: {
+          aca_hash_key?: string | null
+          closed_at?: string | null
+          id?: string | null
+          masked_petitioner?: never
+          opened_at?: string | null
+          reason?: string | null
+          signature_count?: number | null
+          status?: string | null
+          target_hat_id?: string | null
+          threshold?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hat_recall_petitions_target_hat_id_fkey"
+            columns: ["target_hat_id"]
+            isOneToOne: false
+            referencedRelation: "dao_hats"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hat_recall_signatures_public: {
+        Row: {
+          aca_hash_key: string | null
+          created_at: string | null
+          id: string | null
+          masked_signer: string | null
+          petition_id: string | null
+        }
+        Insert: {
+          aca_hash_key?: string | null
+          created_at?: string | null
+          id?: string | null
+          masked_signer?: never
+          petition_id?: string | null
+        }
+        Update: {
+          aca_hash_key?: string | null
+          created_at?: string | null
+          id?: string | null
+          masked_signer?: never
+          petition_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hat_recall_signatures_petition_id_fkey"
+            columns: ["petition_id"]
+            isOneToOne: false
+            referencedRelation: "hat_recall_petitions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hat_recall_signatures_petition_id_fkey"
+            columns: ["petition_id"]
+            isOneToOne: false
+            referencedRelation: "hat_recall_petitions_public"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       idia_schema_manifest: {
         Row: {
@@ -7324,10 +9640,738 @@ export type Database = {
         }
         Relationships: []
       }
+      idia_transfers: {
+        Row: {
+          amount_wei: string | null
+          block_timestamp: string | null
+          from_address: string | null
+          to_address: string | null
+          tx_hash: string | null
+        }
+        Insert: {
+          amount_wei?: never
+          block_timestamp?: string | null
+          from_address?: never
+          to_address?: never
+          tx_hash?: string | null
+        }
+        Update: {
+          amount_wei?: never
+          block_timestamp?: string | null
+          from_address?: never
+          to_address?: never
+          tx_hash?: string | null
+        }
+        Relationships: []
+      }
+      liability_receipts: {
+        Row: {
+          aca_count: string | null
+          block_timestamp: string | null
+          data_buyer: string | null
+          purchase_amount_usdc: string | null
+          receipt_id: string | null
+          synapse_receipt_id: string | null
+          tx_hash: string | null
+        }
+        Insert: {
+          aca_count?: never
+          block_timestamp?: string | null
+          data_buyer?: never
+          purchase_amount_usdc?: never
+          receipt_id?: never
+          synapse_receipt_id?: never
+          tx_hash?: string | null
+        }
+        Update: {
+          aca_count?: never
+          block_timestamp?: string | null
+          data_buyer?: never
+          purchase_amount_usdc?: never
+          receipt_id?: never
+          synapse_receipt_id?: never
+          tx_hash?: string | null
+        }
+        Relationships: []
+      }
       library_actuals: {
         Row: {
           data_category: string | null
           total_records: number | null
+        }
+        Relationships: []
+      }
+      member_wallet_directory: {
+        Row: {
+          user_id: string | null
+          wallet_address: string | null
+        }
+        Insert: {
+          user_id?: string | null
+          wallet_address?: string | null
+        }
+        Update: {
+          user_id?: string | null
+          wallet_address?: string | null
+        }
+        Relationships: []
+      }
+      proposal_comments_public: {
+        Row: {
+          aca_hash_key: string | null
+          body: string | null
+          created_at: string | null
+          edited_at: string | null
+          id: string | null
+          masked_author: string | null
+          parent_id: string | null
+          proposal_id: string | null
+          redacted_at: string | null
+        }
+        Insert: {
+          aca_hash_key?: string | null
+          body?: string | null
+          created_at?: string | null
+          edited_at?: string | null
+          id?: string | null
+          masked_author?: never
+          parent_id?: string | null
+          proposal_id?: string | null
+          redacted_at?: string | null
+        }
+        Update: {
+          aca_hash_key?: string | null
+          body?: string | null
+          created_at?: string | null
+          edited_at?: string | null
+          id?: string | null
+          masked_author?: never
+          parent_id?: string | null
+          proposal_id?: string | null
+          redacted_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "proposal_comments_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "proposal_comments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "proposal_comments_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "proposal_comments_public"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "proposal_comments_proposal_id_fkey"
+            columns: ["proposal_id"]
+            isOneToOne: false
+            referencedRelation: "dao_proposals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "proposal_comments_proposal_id_fkey"
+            columns: ["proposal_id"]
+            isOneToOne: false
+            referencedRelation: "dao_proposals_public"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      proposal_signatures_public: {
+        Row: {
+          aca_hash_key: string | null
+          created_at: string | null
+          id: string | null
+          masked_signer: string | null
+          proposal_id: string | null
+          signature_type: string | null
+        }
+        Insert: {
+          aca_hash_key?: string | null
+          created_at?: string | null
+          id?: string | null
+          masked_signer?: never
+          proposal_id?: string | null
+          signature_type?: string | null
+        }
+        Update: {
+          aca_hash_key?: string | null
+          created_at?: string | null
+          id?: string | null
+          masked_signer?: never
+          proposal_id?: string | null
+          signature_type?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "proposal_signatures_proposal_id_fkey"
+            columns: ["proposal_id"]
+            isOneToOne: false
+            referencedRelation: "dao_proposals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "proposal_signatures_proposal_id_fkey"
+            columns: ["proposal_id"]
+            isOneToOne: false
+            referencedRelation: "dao_proposals_public"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      raw_app_data_public: {
+        Row: {
+          aca_hash_key: string | null
+          anonymized_payload: Json | null
+          created_at: string | null
+          data_category: string | null
+          data_quality_score: number | null
+          device_aca_key: string | null
+          event_type: string | null
+          id: string | null
+          location_zone: string | null
+          masked_owner: string | null
+          processed_at: string | null
+          raw_source: string | null
+          session_context: Json | null
+          telemetry_payload: Json | null
+        }
+        Insert: {
+          aca_hash_key?: string | null
+          anonymized_payload?: Json | null
+          created_at?: string | null
+          data_category?: string | null
+          data_quality_score?: number | null
+          device_aca_key?: string | null
+          event_type?: string | null
+          id?: string | null
+          location_zone?: string | null
+          masked_owner?: never
+          processed_at?: string | null
+          raw_source?: string | null
+          session_context?: Json | null
+          telemetry_payload?: Json | null
+        }
+        Update: {
+          aca_hash_key?: string | null
+          anonymized_payload?: Json | null
+          created_at?: string | null
+          data_category?: string | null
+          data_quality_score?: number | null
+          device_aca_key?: string | null
+          event_type?: string | null
+          id?: string | null
+          location_zone?: string | null
+          masked_owner?: never
+          processed_at?: string | null
+          raw_source?: string | null
+          session_context?: Json | null
+          telemetry_payload?: Json | null
+        }
+        Relationships: []
+      }
+      raw_health_data_public: {
+        Row: {
+          aca_hash: string | null
+          aca_hash_key: string | null
+          activity_type: string | null
+          created_at: string | null
+          device_type: string | null
+          id: string | null
+          last_error: string | null
+          masked_owner: string | null
+          next_retry_at: string | null
+          processed: boolean | null
+          processing_completed_at: string | null
+          processing_started_at: string | null
+          processing_status: Database["public"]["Enums"]["sync_status"] | null
+          raw_payload: Json | null
+          recorded_at: string | null
+          retry_count: number | null
+          source: string | null
+          step_count: number | null
+        }
+        Insert: {
+          aca_hash?: string | null
+          aca_hash_key?: string | null
+          activity_type?: string | null
+          created_at?: string | null
+          device_type?: string | null
+          id?: string | null
+          last_error?: string | null
+          masked_owner?: never
+          next_retry_at?: string | null
+          processed?: boolean | null
+          processing_completed_at?: string | null
+          processing_started_at?: string | null
+          processing_status?: Database["public"]["Enums"]["sync_status"] | null
+          raw_payload?: Json | null
+          recorded_at?: string | null
+          retry_count?: number | null
+          source?: string | null
+          step_count?: number | null
+        }
+        Update: {
+          aca_hash?: string | null
+          aca_hash_key?: string | null
+          activity_type?: string | null
+          created_at?: string | null
+          device_type?: string | null
+          id?: string | null
+          last_error?: string | null
+          masked_owner?: never
+          next_retry_at?: string | null
+          processed?: boolean | null
+          processing_completed_at?: string | null
+          processing_started_at?: string | null
+          processing_status?: Database["public"]["Enums"]["sync_status"] | null
+          raw_payload?: Json | null
+          recorded_at?: string | null
+          retry_count?: number | null
+          source?: string | null
+          step_count?: number | null
+        }
+        Relationships: []
+      }
+      staged_health_data_public: {
+        Row: {
+          aca_hash_key: string | null
+          active_energy_kcal: number | null
+          activity_type: string | null
+          basal_energy_kcal: number | null
+          blood_oxygen_percentage: number | null
+          blood_pressure_diastolic: number | null
+          blood_pressure_systolic: number | null
+          body_temperature_f: number | null
+          created_at: string | null
+          data_quality_score: number | null
+          double_support_percentage: number | null
+          duration_seconds: number | null
+          effort_score: number | null
+          environmental_audio_exposure_db: number | null
+          faculty: string | null
+          heart_rate: number | null
+          heart_rate_variability_ms: number | null
+          id: string | null
+          is_settled: boolean | null
+          masked_entity: string | null
+          masked_owner: string | null
+          masked_platform_guid: string | null
+          masked_pseudo: string | null
+          masked_sovereign: string | null
+          payload: Json | null
+          processed_at: string | null
+          raw_data_id: string | null
+          respiratory_rate: number | null
+          resting_heart_rate: number | null
+          reward_amount: number | null
+          reward_calculated: boolean | null
+          settled_at: string | null
+          sleep_analysis_value: number | null
+          status: string | null
+          step_length_cm: number | null
+          steps_count: number | null
+          synapse_weight_coefficient: number | null
+          uv_exposure_index: number | null
+          vo2_max: number | null
+          walking_asymmetry_percentage: number | null
+          walking_speed_kmh: number | null
+          walking_steadiness_percentage: number | null
+        }
+        Insert: {
+          aca_hash_key?: string | null
+          active_energy_kcal?: number | null
+          activity_type?: string | null
+          basal_energy_kcal?: number | null
+          blood_oxygen_percentage?: number | null
+          blood_pressure_diastolic?: number | null
+          blood_pressure_systolic?: number | null
+          body_temperature_f?: number | null
+          created_at?: string | null
+          data_quality_score?: number | null
+          double_support_percentage?: number | null
+          duration_seconds?: number | null
+          effort_score?: number | null
+          environmental_audio_exposure_db?: number | null
+          faculty?: string | null
+          heart_rate?: number | null
+          heart_rate_variability_ms?: number | null
+          id?: string | null
+          is_settled?: boolean | null
+          masked_entity?: never
+          masked_owner?: never
+          masked_platform_guid?: never
+          masked_pseudo?: never
+          masked_sovereign?: never
+          payload?: Json | null
+          processed_at?: string | null
+          raw_data_id?: string | null
+          respiratory_rate?: number | null
+          resting_heart_rate?: number | null
+          reward_amount?: number | null
+          reward_calculated?: boolean | null
+          settled_at?: string | null
+          sleep_analysis_value?: number | null
+          status?: string | null
+          step_length_cm?: number | null
+          steps_count?: number | null
+          synapse_weight_coefficient?: number | null
+          uv_exposure_index?: number | null
+          vo2_max?: number | null
+          walking_asymmetry_percentage?: number | null
+          walking_speed_kmh?: number | null
+          walking_steadiness_percentage?: number | null
+        }
+        Update: {
+          aca_hash_key?: string | null
+          active_energy_kcal?: number | null
+          activity_type?: string | null
+          basal_energy_kcal?: number | null
+          blood_oxygen_percentage?: number | null
+          blood_pressure_diastolic?: number | null
+          blood_pressure_systolic?: number | null
+          body_temperature_f?: number | null
+          created_at?: string | null
+          data_quality_score?: number | null
+          double_support_percentage?: number | null
+          duration_seconds?: number | null
+          effort_score?: number | null
+          environmental_audio_exposure_db?: number | null
+          faculty?: string | null
+          heart_rate?: number | null
+          heart_rate_variability_ms?: number | null
+          id?: string | null
+          is_settled?: boolean | null
+          masked_entity?: never
+          masked_owner?: never
+          masked_platform_guid?: never
+          masked_pseudo?: never
+          masked_sovereign?: never
+          payload?: Json | null
+          processed_at?: string | null
+          raw_data_id?: string | null
+          respiratory_rate?: number | null
+          resting_heart_rate?: number | null
+          reward_amount?: number | null
+          reward_calculated?: boolean | null
+          settled_at?: string | null
+          sleep_analysis_value?: number | null
+          status?: string | null
+          step_length_cm?: number | null
+          steps_count?: number | null
+          synapse_weight_coefficient?: number | null
+          uv_exposure_index?: number | null
+          vo2_max?: number | null
+          walking_asymmetry_percentage?: number | null
+          walking_speed_kmh?: number | null
+          walking_steadiness_percentage?: number | null
+        }
+        Relationships: []
+      }
+      staged_lifestyle_data_public: {
+        Row: {
+          aca_hash_key: string | null
+          created_at: string | null
+          data_quality_score: number | null
+          event_category: string | null
+          event_type: string | null
+          id: string | null
+          masked_entity: string | null
+          masked_owner: string | null
+          masked_pseudo: string | null
+          processed_at: string | null
+          reward_amount: number | null
+          reward_calculated: boolean | null
+          session_duration: number | null
+          synapse_weight_coefficient: number | null
+        }
+        Insert: {
+          aca_hash_key?: string | null
+          created_at?: string | null
+          data_quality_score?: number | null
+          event_category?: string | null
+          event_type?: string | null
+          id?: string | null
+          masked_entity?: never
+          masked_owner?: never
+          masked_pseudo?: never
+          processed_at?: string | null
+          reward_amount?: number | null
+          reward_calculated?: boolean | null
+          session_duration?: number | null
+          synapse_weight_coefficient?: number | null
+        }
+        Update: {
+          aca_hash_key?: string | null
+          created_at?: string | null
+          data_quality_score?: number | null
+          event_category?: string | null
+          event_type?: string | null
+          id?: string | null
+          masked_entity?: never
+          masked_owner?: never
+          masked_pseudo?: never
+          processed_at?: string | null
+          reward_amount?: number | null
+          reward_calculated?: boolean | null
+          session_duration?: number | null
+          synapse_weight_coefficient?: number | null
+        }
+        Relationships: []
+      }
+      synapse_controller_public: {
+        Row: {
+          aca_hash_key: string | null
+          created_at: string | null
+          id: string | null
+          masked_owner: string | null
+          raw_data: Json | null
+          status: string | null
+        }
+        Insert: {
+          aca_hash_key?: string | null
+          created_at?: string | null
+          id?: string | null
+          masked_owner?: never
+          raw_data?: Json | null
+          status?: string | null
+        }
+        Update: {
+          aca_hash_key?: string | null
+          created_at?: string | null
+          id?: string | null
+          masked_owner?: never
+          raw_data?: Json | null
+          status?: string | null
+        }
+        Relationships: []
+      }
+      team_members: {
+        Row: {
+          aca_secured: boolean | null
+          address: string | null
+          assigned_locations: string[] | null
+          business_id: string | null
+          city: string | null
+          created_at: string | null
+          direct_deposit_enabled: boolean | null
+          email: string | null
+          emergency_contact_name: string | null
+          emergency_contact_phone: string | null
+          hire_date: string | null
+          hourly_rate: number | null
+          id: string | null
+          is_ephemeral: boolean | null
+          last_login: string | null
+          name: string | null
+          notes: string | null
+          overtime_rate: number | null
+          pay_frequency: string | null
+          permission_template_id: string | null
+          permissions: Json | null
+          phone: string | null
+          platform_role: string | null
+          role: string | null
+          salary_type: string | null
+          state: string | null
+          status: string | null
+          tax_filing_status: string | null
+          updated_at: string | null
+          user_id: string | null
+          zip: string | null
+        }
+        Insert: {
+          aca_secured?: boolean | null
+          address?: string | null
+          assigned_locations?: string[] | null
+          business_id?: string | null
+          city?: string | null
+          created_at?: string | null
+          direct_deposit_enabled?: boolean | null
+          email?: string | null
+          emergency_contact_name?: string | null
+          emergency_contact_phone?: string | null
+          hire_date?: string | null
+          hourly_rate?: number | null
+          id?: string | null
+          is_ephemeral?: boolean | null
+          last_login?: string | null
+          name?: string | null
+          notes?: string | null
+          overtime_rate?: number | null
+          pay_frequency?: string | null
+          permission_template_id?: string | null
+          permissions?: Json | null
+          phone?: string | null
+          platform_role?: string | null
+          role?: string | null
+          salary_type?: string | null
+          state?: string | null
+          status?: string | null
+          tax_filing_status?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+          zip?: string | null
+        }
+        Update: {
+          aca_secured?: boolean | null
+          address?: string | null
+          assigned_locations?: string[] | null
+          business_id?: string | null
+          city?: string | null
+          created_at?: string | null
+          direct_deposit_enabled?: boolean | null
+          email?: string | null
+          emergency_contact_name?: string | null
+          emergency_contact_phone?: string | null
+          hire_date?: string | null
+          hourly_rate?: number | null
+          id?: string | null
+          is_ephemeral?: boolean | null
+          last_login?: string | null
+          name?: string | null
+          notes?: string | null
+          overtime_rate?: number | null
+          pay_frequency?: string | null
+          permission_template_id?: string | null
+          permissions?: Json | null
+          phone?: string | null
+          platform_role?: string | null
+          role?: string | null
+          salary_type?: string | null
+          state?: string | null
+          status?: string | null
+          tax_filing_status?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+          zip?: string | null
+        }
+        Relationships: []
+      }
+      team_schedules: {
+        Row: {
+          break_minutes: number | null
+          business_id: string | null
+          created_at: string | null
+          end_time: string | null
+          id: string | null
+          location: string | null
+          notes: string | null
+          schedule_date: string | null
+          start_time: string | null
+          status: string | null
+          team_member_id: string | null
+        }
+        Insert: {
+          break_minutes?: number | null
+          business_id?: string | null
+          created_at?: string | null
+          end_time?: string | null
+          id?: string | null
+          location?: string | null
+          notes?: string | null
+          schedule_date?: string | null
+          start_time?: string | null
+          status?: string | null
+          team_member_id?: string | null
+        }
+        Update: {
+          break_minutes?: number | null
+          business_id?: string | null
+          created_at?: string | null
+          end_time?: string | null
+          id?: string | null
+          location?: string | null
+          notes?: string | null
+          schedule_date?: string | null
+          start_time?: string | null
+          status?: string | null
+          team_member_id?: string | null
+        }
+        Relationships: []
+      }
+      time_entries: {
+        Row: {
+          break_minutes: number | null
+          business_id: string | null
+          clock_in: string | null
+          clock_out: string | null
+          created_at: string | null
+          id: string | null
+          location: string | null
+          notes: string | null
+          overtime_hours: number | null
+          status: string | null
+          team_member_id: string | null
+          total_hours: number | null
+        }
+        Insert: {
+          break_minutes?: number | null
+          business_id?: string | null
+          clock_in?: string | null
+          clock_out?: string | null
+          created_at?: string | null
+          id?: string | null
+          location?: string | null
+          notes?: string | null
+          overtime_hours?: number | null
+          status?: string | null
+          team_member_id?: string | null
+          total_hours?: number | null
+        }
+        Update: {
+          break_minutes?: number | null
+          business_id?: string | null
+          clock_in?: string | null
+          clock_out?: string | null
+          created_at?: string | null
+          id?: string | null
+          location?: string | null
+          notes?: string | null
+          overtime_hours?: number | null
+          status?: string | null
+          team_member_id?: string | null
+          total_hours?: number | null
+        }
+        Relationships: []
+      }
+      user_aca_records_public: {
+        Row: {
+          aca_hash_key: string | null
+          consent_scope: string[] | null
+          consent_type: string | null
+          consumed_at: string | null
+          created_at: string | null
+          id: string | null
+          masked_owner: string | null
+          source_id: string | null
+          tx_hash: string | null
+        }
+        Insert: {
+          aca_hash_key?: string | null
+          consent_scope?: string[] | null
+          consent_type?: string | null
+          consumed_at?: string | null
+          created_at?: string | null
+          id?: string | null
+          masked_owner?: never
+          source_id?: string | null
+          tx_hash?: string | null
+        }
+        Update: {
+          aca_hash_key?: string | null
+          consent_scope?: string[] | null
+          consent_type?: string | null
+          consumed_at?: string | null
+          created_at?: string | null
+          id?: string | null
+          masked_owner?: never
+          source_id?: string | null
+          tx_hash?: string | null
         }
         Relationships: []
       }
@@ -7345,6 +10389,7 @@ export type Database = {
         }
         Returns: number
       }
+      auto_promote_pending_veto: { Args: never; Returns: number }
       calculate_business_health_index: {
         Args: { p_business_id: string; p_location_id?: string }
         Returns: number
@@ -7431,6 +10476,7 @@ export type Database = {
           count: number
         }[]
       }
+      get_service_role_key: { Args: never; Returns: string }
       get_synapse_balance: { Args: { uid: string }; Returns: number }
       get_user_business_access: {
         Args: { p_user_id: string }
@@ -7449,7 +10495,16 @@ export type Database = {
         Args: { p_pseudo_id: string }
         Returns: string
       }
+      get_vulture_salt: { Args: never; Returns: string }
+      grant_hat: {
+        Args: { _hat_type: string; _target_user: string }
+        Returns: string
+      }
       has_business_access: { Args: { p_business_id: string }; Returns: boolean }
+      has_hat: {
+        Args: { _hat_type: string; _user_id: string }
+        Returns: boolean
+      }
       increment_community_pool: {
         Args: { p_fiat_amount: number; p_pool_type: string }
         Returns: undefined
@@ -7471,7 +10526,7 @@ export type Database = {
         Returns: undefined
       }
       increment_wallet_balance: {
-        Args: { increment_amount: number; target_user_id: string }
+        Args: { amount: number; target_user_id: string }
         Returns: undefined
       }
       increment_wallet_cash: {
@@ -7489,6 +10544,13 @@ export type Database = {
         Returns: Json
       }
       invoke_refiner_secure: { Args: { payload: Json }; Returns: undefined }
+      is_business_leadership: {
+        Args: { _business_id: string }
+        Returns: boolean
+      }
+      is_business_manager: { Args: { _business_id: string }; Returns: boolean }
+      is_business_member: { Args: { _business_id: string }; Returns: boolean }
+      is_csuite: { Args: { _user_id: string }; Returns: boolean }
       is_org_admin: { Args: { _business_id: string }; Returns: boolean }
       log_delt_egress: {
         Args: {
@@ -7502,6 +10564,7 @@ export type Database = {
         Returns: string
       }
       maintain_real_time_signals: { Args: never; Returns: undefined }
+      mask_owner: { Args: { _id: string }; Returns: string }
       process_idia_telemetry: {
         Args: {
           p_credit: number
@@ -7517,6 +10580,10 @@ export type Database = {
           error_count: number
           processed_count: number
         }[]
+      }
+      provision_business_from_request: {
+        Args: { p_request_id: string; p_vertical_id: string }
+        Returns: undefined
       }
       provision_employee_via_aca: {
         Args: {
@@ -7539,6 +10606,7 @@ export type Database = {
           hourly_rate: number | null
           id: string
           is_ephemeral: boolean
+          job_title: string | null
           last_login: string | null
           name: string
           notes: string | null
@@ -7581,6 +10649,7 @@ export type Database = {
           hourly_rate: number | null
           id: string
           is_ephemeral: boolean
+          job_title: string | null
           last_login: string | null
           name: string
           notes: string | null
@@ -7606,6 +10675,14 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      provision_pending_veto_hat: {
+        Args: { _hat_type: string; _provisioner: string; _target_user: string }
+        Returns: string
+      }
+      refresh_application_sponsor_count: {
+        Args: { _application_id: string }
+        Returns: number
+      }
       revoke_employee: {
         Args: { _employee_id: string }
         Returns: {
@@ -7623,6 +10700,7 @@ export type Database = {
           hourly_rate: number | null
           id: string
           is_ephemeral: boolean
+          job_title: string | null
           last_login: string | null
           name: string
           notes: string | null
@@ -7650,11 +10728,11 @@ export type Database = {
       }
       set_usdc_balance: {
         Args: {
-          p_block_number?: number
+          p_block_number: number
           p_micro_balance: number
           p_user_id: string
         }
-        Returns: number
+        Returns: undefined
       }
       settle_sovereign_transaction: {
         Args: {
@@ -7685,6 +10763,19 @@ export type Database = {
             }
             Returns: Json
           }
+      sponsor_application: {
+        Args: { _application_id: string; _sponsor_aca_hash: string }
+        Returns: Json
+      }
+      submit_variance_correction: {
+        Args: {
+          _corrective_action: string
+          _manager_pin: string
+          _root_cause: string
+          _variance_id: string
+        }
+        Returns: string
+      }
       trigger_daily_apple_health_sync: {
         Args: never
         Returns: {
@@ -7713,19 +10804,39 @@ export type Database = {
       }
     }
     Enums: {
-      idia_transaction_status: "PENDING" | "SETTLED" | "FAILED" | "completed"
+      idia_account_type: "individual" | "business" | "enterprise"
+      idia_pay_role: "org_admin" | "team_lead" | "team_member"
+      idia_saas_tier:
+        | "free"
+        | "pro"
+        | "pro_plus"
+        | "pure_alpha"
+        | "analyst"
+        | "professional"
+        | "enterprise"
+      idia_transaction_status:
+        | "pending"
+        | "settled"
+        | "failed"
+        | "completed"
+        | "pending_wallet"
       idia_transaction_type:
-        | "DATA_SALE"
-        | "DEPOSIT"
-        | "WITHDRAWAL"
-        | "FEE"
-        | "REWARD"
+        | "data_sale"
+        | "deposit"
+        | "withdrawal"
+        | "fee"
+        | "reward"
         | "settlement"
         | "fbo_dissemination"
-        | "FREE_COMPUTE"
-        | "INTERNAL_DEPOSIT"
+        | "free_compute"
+        | "internal_deposit"
+        | "data_sale_payout"
+        | "ecosystem_war_chest"
+        | "hub_protocol_fee"
+        | "synapse_purchase"
+        | "."
       sync_status: "pending" | "processing" | "completed" | "failed"
-      user_role: "owner" | "manager" | "employee" | "warehouse_associate"
+      user_role: "leadership" | "manager" | "employee" | "csuite"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -7853,20 +10964,42 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      idia_transaction_status: ["PENDING", "SETTLED", "FAILED", "completed"],
+      idia_account_type: ["individual", "business", "enterprise"],
+      idia_pay_role: ["org_admin", "team_lead", "team_member"],
+      idia_saas_tier: [
+        "free",
+        "pro",
+        "pro_plus",
+        "pure_alpha",
+        "analyst",
+        "professional",
+        "enterprise",
+      ],
+      idia_transaction_status: [
+        "pending",
+        "settled",
+        "failed",
+        "completed",
+        "pending_wallet",
+      ],
       idia_transaction_type: [
-        "DATA_SALE",
-        "DEPOSIT",
-        "WITHDRAWAL",
-        "FEE",
-        "REWARD",
+        "data_sale",
+        "deposit",
+        "withdrawal",
+        "fee",
+        "reward",
         "settlement",
         "fbo_dissemination",
-        "FREE_COMPUTE",
-        "INTERNAL_DEPOSIT",
+        "free_compute",
+        "internal_deposit",
+        "data_sale_payout",
+        "ecosystem_war_chest",
+        "hub_protocol_fee",
+        "synapse_purchase",
+        ".",
       ],
       sync_status: ["pending", "processing", "completed", "failed"],
-      user_role: ["owner", "manager", "employee", "warehouse_associate"],
+      user_role: ["leadership", "manager", "employee", "csuite"],
     },
   },
 } as const

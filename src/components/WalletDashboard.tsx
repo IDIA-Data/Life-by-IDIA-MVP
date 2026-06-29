@@ -174,28 +174,25 @@ const WalletDashboard = () => {
 
   return (
     <div className="p-4 space-y-6">
-      <Card className="bg-gradient-to-r from-teal-500 to-cyan-600 text-white overflow-hidden">
-        <CardContent className="p-4">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-bold">Your Balances</h2>
+      <Card className="bg-gradient-to-br from-[hsl(178,42%,32%)] to-[hsl(178,42%,42%)] text-white border-none shadow-xl rounded-[2.5rem] overflow-hidden">
+        <CardContent className="p-7">
+          <div className="flex justify-between items-start">
+            <div className="space-y-1">
+              <p className="text-[10px] font-black uppercase tracking-[0.3em] text-teal-100/60">
+                Your Balances
+              </p>
+              <h2 className="text-4xl font-black">
+                ${balance.usdc_balance.toFixed(2)}{" "}
+                <span className="text-sm font-medium text-teal-100/40">USDC</span>
+              </h2>
+            </div>
+            <CreditCard className="w-10 h-10 text-orange-400 drop-shadow-lg" />
           </div>
-
-          <div className="grid grid-cols-3 gap-4">
-            <div className="text-center">
-              <p className="text-teal-100 text-xs font-medium">Cash</p>
-              {/* Updated to use balance from hook */}
-              <p className="text-xl font-bold">${balance.cash_balance.toFixed(2)}</p>
-            </div>
-            <div className="text-center">
-              <p className="text-teal-100 text-xs font-medium">USDC</p>
-              {/* Updated to use balance from hook */}
-              <p className="text-xl font-bold">${balance.usdc_balance.toFixed(2)}</p>
-            </div>
-            <div className="text-center">
-              <p className="text-teal-100 text-xs font-medium">IDIA Token</p>
-              {/* Updated to use balance from hook */}
-              <p className="text-xl font-bold">{balance.idia_token_balance.toFixed(2)}</p>
-            </div>
+          <div className="mt-6 flex items-center gap-2 border-t border-white/10 pt-4">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+            <span className="text-[9px] font-black uppercase tracking-widest text-teal-50">
+              IDIA · {balance.idia_token_balance.toLocaleString(undefined, { maximumFractionDigits: 4 })}
+            </span>
           </div>
         </CardContent>
       </Card>

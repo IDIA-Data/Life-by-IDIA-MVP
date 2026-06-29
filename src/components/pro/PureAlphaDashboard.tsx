@@ -23,6 +23,8 @@ import { toast } from "@/hooks/use-toast";
 
 // IDIA Protocol Components
 import GhostProtocolWrapper from "./GhostProtocol";
+import { GammaPhotosensitivityWarning } from "./GammaPhotosensitivityWarning";
+import InsightsSection from "./insights/InsightsSection";
 
 // --- EXPANDED SOVEREIGN SCHEMA ---
 interface StagedHealthData {
@@ -115,6 +117,7 @@ const PureAlphaDashboard = ({ isMasked = false }: PureAlphaDashboardProps) => {
   // --- GAMMA & RSVP STATE ---
   const [gammaActive, setGammaActive] = useState(false);
   const [isFlashing, setIsFlashing] = useState(false);
+  const [gammaWarningOpen, setGammaWarningOpen] = useState(false);
   
   const [rsvpPhase, setRsvpPhase] = useState<'IDLE' | 'CALIBRATING' | 'PRESENTING' | 'MASK' | 'RECALL' | 'ROUND_COMPLETE' | 'RESULT'>('IDLE');
   const [testRound, setTestRound] = useState(1);
@@ -394,9 +397,25 @@ const PureAlphaDashboard = ({ isMasked = false }: PureAlphaDashboardProps) => {
     }
   };
 
+  const handleGammaToggle = (checked: boolean) => {
+    if (checked) {
+      console.log("[PureAlphaDashboard:UI] Gamma requested. Opening safety gate.");
+      setGammaWarningOpen(true);
+    } else {
+      console.log("[PureAlphaDashboard:UI] Disabling Gamma sequence.");
+      triggerGammaSequence(false);
+    }
+  };
+
   // --- RENDER ---
   return (
     <GhostProtocolWrapper>
+      <GammaPhotosensitivityWarning
+        open={gammaWarningOpen}
+        surface="PureAlphaDashboard"
+        onCancel={() => setGammaWarningOpen(false)}
+        onAcknowledge={() => { setGammaWarningOpen(false); triggerGammaSequence(true); }}
+      />
       {isFlashing && createPortal(
         <div 
           className="fixed -inset-[200%] z-[99999] pointer-events-none animate-[seizure-rgb_25ms_linear_infinite]" 
@@ -753,7 +772,7 @@ const PureAlphaDashboard = ({ isMasked = false }: PureAlphaDashboardProps) => {
                      <p className="text-[10px] font-black text-slate-900 uppercase">Hardware Pulse</p>
                      <p className="text-[9px] text-teal-600 font-bold uppercase tracking-tighter">{gammaActive ? "Transmitting" : "Standby"}</p>
                   </div>
-                  <Switch checked={gammaActive} onCheckedChange={triggerGammaSequence} className="data-[state=checked]:bg-orange-500" />
+                  <Switch checked={gammaActive} onCheckedChange={handleGammaToggle} className="data-[state=checked]:bg-orange-500" />
                </div>
             </div>
           </TabsContent>
@@ -830,6 +849,10 @@ const PureAlphaDashboard = ({ isMasked = false }: PureAlphaDashboardProps) => {
              </div>
           </TabsContent>
         </Tabs>
+
+        <div className="mt-4">
+          <InsightsSection tier="pure_alpha" />
+        </div>
 
         <style>{`
           @keyframes seizure-rgb {

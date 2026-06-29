@@ -8,6 +8,8 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { GammaPhotosensitivityWarning } from "./GammaPhotosensitivityWarning";
+import InsightsSection from "./insights/InsightsSection";
 
 // --- TYPES ALIGNED TO SOVEREIGN SCHEMA ---
 interface StagedHealthData {
@@ -39,6 +41,7 @@ const CPMDashboard = ({ isMasked = false }: { isMasked?: boolean }) => {
   const [loading, setLoading] = useState(true);
   const [gammaActive, setGammaActive] = useState(false);
   const [isFlashing, setIsFlashing] = useState(false);
+  const [gammaWarningOpen, setGammaWarningOpen] = useState(false);
   
   // --- 5-ROUND RSVP ENGINE ---
   const [rsvpPhase, setRsvpPhase] = useState<'IDLE' | 'CALIBRATING' | 'PRESENTING' | 'MASK' | 'RECALL' | 'ROUND_COMPLETE' | 'RESULT'>('IDLE');
@@ -151,6 +154,16 @@ const CPMDashboard = ({ isMasked = false }: { isMasked?: boolean }) => {
     }
   };
 
+  const handleGammaToggle = (checked: boolean) => {
+    if (checked) {
+      console.log("[CPMDashboard:UI] Gamma requested. Opening safety gate.");
+      setGammaWarningOpen(true);
+    } else {
+      console.log("[CPMDashboard:UI] Disabling Gamma sequence.");
+      triggerGammaSequence(false);
+    }
+  };
+
   useEffect(() => {
     if (isMasked) return;
     let isMounted = true;
@@ -184,6 +197,12 @@ const CPMDashboard = ({ isMasked = false }: { isMasked?: boolean }) => {
 
   return (
     <>
+      <GammaPhotosensitivityWarning
+        open={gammaWarningOpen}
+        surface="CPMDashboard"
+        onCancel={() => setGammaWarningOpen(false)}
+        onAcknowledge={() => { setGammaWarningOpen(false); triggerGammaSequence(true); }}
+      />
       {isFlashing && createPortal(
         <div 
           className="fixed inset-0 z-[99999] pointer-events-none animate-[seizure-rgb_25ms_linear_infinite]" 
@@ -257,7 +276,7 @@ const CPMDashboard = ({ isMasked = false }: { isMasked?: boolean }) => {
                      <p className="text-[10px] font-black text-slate-900 uppercase">Hardware Pulse</p>
                      <p className="text-[9px] text-teal-600 font-bold uppercase tracking-tighter">{gammaActive ? "Transmitting" : "Standby"}</p>
                   </div>
-                  <Switch checked={gammaActive} onCheckedChange={triggerGammaSequence} className="data-[state=checked]:bg-orange-500 shadow-sm" />
+                  <Switch checked={gammaActive} onCheckedChange={handleGammaToggle} className="data-[state=checked]:bg-orange-500 shadow-sm" />
                </div>
             </div>
           </TabsContent>
@@ -333,6 +352,10 @@ const CPMDashboard = ({ isMasked = false }: { isMasked?: boolean }) => {
              </div>
           </TabsContent>
         </Tabs>
+
+        <div className="mt-4">
+          <InsightsSection tier="pro_plus" />
+        </div>
 
         <style>{`
           @keyframes seizure-rgb {
