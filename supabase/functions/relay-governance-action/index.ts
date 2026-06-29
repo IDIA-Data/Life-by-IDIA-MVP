@@ -28,7 +28,10 @@ const PROPOSAL_STATE_NAMES = [
 ];
 
 const IDIA_TOKEN_ADDR_FOR_VOTES = "0x6526F939D257E67896821c25B6C24Daa404a01FB";
+<<<<<<< Updated upstream
 
+=======
+>>>>>>> Stashed changes
 const GOVERNOR_ABI = [
   "function castVote(uint256 proposalId, uint8 support) returns (uint256)",
   "function castVoteBySig(uint256 proposalId, uint8 support, address voter, bytes signature) returns (uint256)",
@@ -38,16 +41,23 @@ const GOVERNOR_ABI = [
   "function getVotes(address account, uint256 blockNumber) view returns (uint256)",
   "function hasVoted(uint256 proposalId, address account) view returns (bool)",
   "function cancel(address[] targets, uint256[] values, bytes[] calldatas, bytes32 descriptionHash) returns (uint256)",
+<<<<<<< Updated upstream
   // OpenZeppelin v5 Governor custom errors — required so ethers can decode
   // contract reverts (e.g. 0x94ab6c07) instead of dropping them as
   // "unknown custom error". Any selector not in this list will still surface
   // as raw hex via err.data in the catch handler below.
+=======
+  // OZ v5 Governor errors (unchanged)
+>>>>>>> Stashed changes
   "error GovernorAlreadyCastVote(address voter)",
   "error GovernorAlreadyQueuedProposal(uint256 proposalId)",
   "error GovernorDisabledDeposit()",
   "error GovernorInsufficientProposerVotes(address proposer, uint256 votes, uint256 threshold)",
   "error GovernorInvalidProposalLength(uint256 targets, uint256 calldatas, uint256 values)",
+<<<<<<< Updated upstream
   "error GovernorInvalidQuorumFraction(uint256 quorumNumerator, uint256 quorumDenominator)",
+=======
+>>>>>>> Stashed changes
   "error GovernorInvalidSignature(address voter)",
   "error GovernorInvalidVoteParams()",
   "error GovernorInvalidVoteType()",
@@ -61,6 +71,14 @@ const GOVERNOR_ABI = [
   "error GovernorUnexpectedProposalState(uint256 proposalId, uint8 current, bytes32 expectedStates)",
   "error QueueEmpty()",
   "error QueueFull()",
+<<<<<<< Updated upstream
+=======
+  // V3 adjustable quorum errors
+  "error NotExecutor()",
+  "error NotSafe()",
+  "error BelowFloor(uint256 proposed, uint256 floor)",
+  "error AboveCeiling(uint256 proposed, uint256 ceiling)",
+>>>>>>> Stashed changes
 ];
 
 // Decode an ethers v6 contract revert into { name, args, selector } using the
@@ -87,7 +105,11 @@ const NETWORKS: Record<
   8453: {
     name: "Base",
     rpcUrlFallback: "https://mainnet.base.org",
+<<<<<<< Updated upstream
     governor: "0x9777067CAd2892D20decAF1a5ccb78e6B291B87a",
+=======
+    governor: Deno.env.get("GOVERNOR_ADDRESS") || "0x9777067CAd2892D20decAF1a5ccb78e6B291B87a",
+>>>>>>> Stashed changes
     targets: {
       team: "0xF0E67683783ef5879b43ef99ab04Bc27A9a71074",
       ecosystem: "0xd052C6F3846b4Fe56E579880Ec9ea2764ABDe708",
