@@ -30,7 +30,11 @@ const EnhancedProfileSettings: React.FC = () => {
 
   const { balance } = useWalletBalance();
 
-  const [selectedInterests, setSelectedInterests] = useState<string[]>(interests ? interests.map((i) => i.id) : []);
+  const [selectedInterests, setSelectedInterests] = useState<string[]>([]);
+
+  useEffect(() => {
+    setSelectedInterests(interests ? interests.map((i) => i.id) : []);
+  }, [interests]);
   const [, setAvatarFile] = useState<File | null>(null);
 
   // 1. Setup matching cache-busting state

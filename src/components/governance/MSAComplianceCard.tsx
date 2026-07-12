@@ -145,12 +145,7 @@ const MSAComplianceCard: React.FC = () => {
           .eq("endpoint", "best-friend-ai")
           .gte("timestamp", since)
           .limit(1000),
-        supabase
-          .from("egress_logs" as any)
-          .select("id, created_at, settled_at")
-          .gte("created_at", since)
-          .not("settled_at", "is", null)
-          .limit(1000),
+        (supabase as any).rpc("governance_global_egress_latency", { p_since: since }),
       ]);
 
       if (bundlesRes.error) throw bundlesRes.error;

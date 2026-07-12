@@ -1,8 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { ExternalLink, ShieldCheck, Wallet } from 'lucide-react';
+import { ExternalLink, Loader2, ShieldCheck, Wallet } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 interface Props {
@@ -12,11 +12,17 @@ interface Props {
 
 const SendRequestModal: React.FC<Props> = ({ isOpen, onClose }) => {
   const { toast } = useToast();
+  const [isLaunching, setIsLaunching] = useState(false);
 
   const handleLaunchMetaMask = () => {
     if (window.webkit?.messageHandlers?.launchMetaMask) {
+      setIsLaunching(true);
       window.webkit.messageHandlers.launchMetaMask.postMessage({});
-      onClose();
+      // Let the user see the button acknowledge the tap before dismissing
+      setTimeout(() => {
+        setIsLaunching(false);
+        onClose();
+      }, 400);
     } else {
       toast({
         title: "Native Bridge Error",
@@ -49,9 +55,19 @@ const SendRequestModal: React.FC<Props> = ({ isOpen, onClose }) => {
 
           <Button
             onClick={handleLaunchMetaMask}
-            className="w-full h-12 rounded-xl bg-[#F6851B] hover:bg-[#E2761B] text-white"
+            disabled={isLaunching}
+            className="w-full h-12 rounded-xl bg-[#F6851B] hover:bg-[#E2761B] text-white transition-all duration-150 ease-out hover:scale-[1.02] active:scale-95 active:shadow-inner disabled:opacity-90 disabled:cursor-wait"
           >
-            Launch MetaMask <ExternalLink className="w-4 h-4 ml-2" />
+            {isLaunching ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                Launching MetaMask…
+              </>
+            ) : (
+              <>
+                Launch MetaMask <ExternalLink className="w-4 h-4 ml-2" />
+              </>
+            )}
           </Button>
         </div>
       </DialogContent>

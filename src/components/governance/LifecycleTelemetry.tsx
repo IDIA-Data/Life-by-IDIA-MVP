@@ -10,20 +10,21 @@ import { stage } from "@/lib/stageLogger";
 import { ethers } from "ethers";
 import { PROTOCOL, ACTIVE_DEPLOYMENT, GOVERNOR_ABI } from "@/config/contracts";
 import { NETWORKS } from "@/services/walletService";
-import { readChainState } from "./ActiveProposalsList";
+import { readChainState, isVotingClosed, isExpiredDbMotion } from "./ActiveProposalsList";
 
 interface ProposalLite {
   id: string;
   title: string;
   description: string | null;
   // Added "pending" for pre-snapshot on-chain proposals
-  lifecycle_phase: "draft" | "pending" | "active" | "succeeded" | "queued" | "executed";
+  lifecycle_phase: "draft" | "pending" | "active" | "succeeded" | "queued" | "executed" | "archived";
   status: string | null;
   created_at: string;
   end_date: string | null;
   quorum_threshold: number | null;
   on_chain_block?: number | null;
   on_chain_id?: string | null;
+  committee_id?: string | null;
 }
 
 export const PHASE_META = {
@@ -59,9 +60,17 @@ export const PHASE_META = {
     label: "Settled",
     color: "text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/30 border-emerald-100 dark:border-emerald-900/50",
   },
+  archived: {
+    icon: "📦",
+    label: "Archived",
+    color:
+      "text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-900/40 border-slate-200 dark:border-slate-800",
+  },
 } as const;
 
 // Direct-RPC quorum read — no service-layer cache, retry, or fallback chain.
+// V3 quorum is adjustable, so telemetry reads the current Governor value
+// instead of DB quorum_threshold or historical snapshot math.
 async function directQuorum(onChainId?: string | null): Promise<bigint> {
   const networkKey = ACTIVE_DEPLOYMENT === "mainnet" ? "base" : "baseSepolia";
   const network = NETWORKS[networkKey];
@@ -69,13 +78,21 @@ async function directQuorum(onChainId?: string | null): Promise<bigint> {
   const provider = new ethers.JsonRpcProvider(rpcUrl, network.chainId);
   const gov = new ethers.Contract(PROTOCOL.governor, GOVERNOR_ABI, provider);
 
-  if (onChainId && onChainId.trim() !== "") {
-    const snap = await gov.proposalSnapshot(onChainId);
-    if (snap && Number(snap) > 0) {
-      const q = await gov.quorum(snap);
-      return BigInt(q);
-    }
+  try {
+    const params = await gov.getQuorumParams();
+    const currentQuorum = params?.currentQuorum ?? params?.[0];
+    if (currentQuorum != null && BigInt(currentQuorum) > 0n) return BigInt(currentQuorum);
+  } catch {
+    // Older governors do not expose V3 adjustable quorum params.
   }
+
+  try {
+    const threshold = await gov.quorumThreshold();
+    if (threshold != null && BigInt(threshold) > 0n) return BigInt(threshold);
+  } catch {
+    // Fall through to OpenZeppelin quorum(timepoint) for legacy governors.
+  }
+
   const block = await provider.getBlockNumber();
   const q = await gov.quorum(block - 1);
   return BigInt(q);
@@ -136,21 +153,28 @@ const DetailDialog: React.FC<{ proposal: ProposalLite | null; onClose: () => voi
       await pollQuorum();
 
       try {
-        const SECONDS_PER_BLOCK = 2;
-        const VOTING_DELAY_BLOCKS = 43200;
-        const VOTING_PERIOD_BLOCKS = 302400;
-        const totalDurationSec = (VOTING_DELAY_BLOCKS + VOTING_PERIOD_BLOCKS) * SECONDS_PER_BLOCK;
-        const endMs = new Date(proposal.created_at).getTime() + totalDurationSec * 1000;
-        const diff = endMs - Date.now();
+        if (proposal.lifecycle_phase === "archived") {
+          const label = (proposal.status || "").toLowerCase().includes("legacy")
+            ? "Voting Closed · Legacy Governor"
+            : "Voting Closed · Deadline Passed";
+          if (alive) setDeadlineState({ label, tone: "ended" });
+        } else {
+          const SECONDS_PER_BLOCK = 2;
+          const VOTING_DELAY_BLOCKS = 43200;
+          const VOTING_PERIOD_BLOCKS = 302400;
+          const totalDurationSec = (VOTING_DELAY_BLOCKS + VOTING_PERIOD_BLOCKS) * SECONDS_PER_BLOCK;
+          const endMs = new Date(proposal.created_at).getTime() + totalDurationSec * 1000;
+          const diff = endMs - Date.now();
 
-        if (alive) {
-          if (diff <= 0) {
-            setDeadlineState({ label: "Voting Closed · Deadline Passed", tone: "ended" });
-          } else {
-            const d = Math.floor(diff / 86400000);
-            const h = Math.floor((diff % 86400000) / 3600000);
-            const m = Math.floor((diff % 3600000) / 60000);
-            setDeadlineState({ label: `Auto-fails in ${d}d ${h}h ${m}m`, tone: "live" });
+          if (alive) {
+            if (diff <= 0) {
+              setDeadlineState({ label: "Voting Closed · Deadline Passed", tone: "ended" });
+            } else {
+              const d = Math.floor(diff / 86400000);
+              const h = Math.floor((diff % 86400000) / 3600000);
+              const m = Math.floor((diff % 3600000) / 60000);
+              setDeadlineState({ label: `Auto-fails in ${d}d ${h}h ${m}m`, tone: "live" });
+            }
           }
         }
       } catch (timelineErr) {
@@ -265,7 +289,7 @@ const LifecycleTelemetry: React.FC = () => {
           .from("dao_proposals")
           .select("*")
           .order("created_at", { ascending: false })
-          .limit(10);
+          .limit(100);
           
         if (error) {
           console.error(`[LIFECYCLE_TELEMETRY][FETCH][ERROR] Supabase fetch rejected: ${error.message}`);
@@ -280,44 +304,86 @@ const LifecycleTelemetry: React.FC = () => {
 
           console.log(`[LIFECYCLE_TELEMETRY][FETCH][PROCESS] Iterating ${rows.length} rows for chain validation.`);
           
-          // REPLACED THE STRICT BUCKET FILTER
-          // Maps all OpenZeppelin EVM states and preserves off-chain drafts
+          // Resilient per-row mapping: never drop a proposal. Fall back to
+          // the DB-stored lifecycle_phase / status when the chain read fails
+          // or returns an unknown state, so cross-user proposals always show.
+          const dbPhaseFor = (r: ProposalLite): ProposalLite["lifecycle_phase"] => {
+            const p = (r.lifecycle_phase as string) || "draft";
+            if (p === "draft" || p === "pending" || p === "active" || p === "succeeded" || p === "queued" || p === "executed") {
+              return p as ProposalLite["lifecycle_phase"];
+            }
+            // cancelled / defeated / expired / unknown → render as draft tail
+            return "draft";
+          };
+
           const stateChecks = await Promise.all(
             rows.map(async (r) => {
+              // DB-only rows (motions): archive when end_date has passed and
+              // the phase isn't terminal-success.
+              const dbClosed = isVotingClosed(undefined, r.end_date) || isExpiredDbMotion(r);
+              const dbPhase = dbPhaseFor(r);
+              const isTerminalSuccess = ["succeeded", "queued", "executed"].includes(dbPhase);
+
               if (!r.on_chain_id) {
-                // Return off-chain motions/drafts directly
-                return { ...r, lifecycle_phase: "draft" as const, status: "In Deliberation" };
+                if (dbClosed && !isTerminalSuccess) {
+                  return { ...r, lifecycle_phase: "archived" as const, status: "Voting Closed · Deadline Passed" };
+                }
+                return { ...r, lifecycle_phase: dbPhase, status: r.status ?? "In Deliberation" };
               }
-              
+
               try {
                 const cs = await readChainState(r.on_chain_id);
                 const st = cs.state;
                 console.log(`[TELEMETRY_BUCKET] ref=${r.on_chain_id} resolved state=${st}`);
-                
+
+                // Deadline-aware short-circuit: chain deadline block passed
+                // (or DB end_date passed) and not a success/queued/executed
+                // terminal state → archive.
+                const chainClosed = isVotingClosed(cs, r.end_date);
+                const chainTerminalSuccess = st === 4 || st === 5 || st === 7;
+                if (chainClosed && !chainTerminalSuccess) {
+                  return { ...r, lifecycle_phase: "archived" as const, status: "Voting Closed · Deadline Passed" };
+                }
+
                 if (st === 0) return { ...r, lifecycle_phase: "pending" as const, status: "Voting Delay" };
-                if (st === 1) return { ...r, lifecycle_phase: "active" as const, status: "Live Vote" };
+                if (st === 1) {
+                  const quorumReached = cs.quorum > 0 && (cs.forVotes + cs.abstainVotes) >= cs.quorum;
+                  const majorityFor = cs.forVotes > cs.againstVotes;
+                  const liveStatus = quorumReached
+                    ? (majorityFor ? "Passing · Voting Open" : "Failing · Voting Open")
+                    : "Live Vote";
+                  return { ...r, lifecycle_phase: "active" as const, status: liveStatus };
+                }
                 if (st === 4) return { ...r, lifecycle_phase: "succeeded" as const, status: "Consensus Reached" };
                 if (st === 5) return { ...r, lifecycle_phase: "queued" as const, status: "Timelocked" };
                 if (st === 7) return { ...r, lifecycle_phase: "executed" as const, status: "Executed" };
-                
-                // Fallback for canceled/defeated EVM states
-                return { ...r, lifecycle_phase: "draft" as const, status: "Archived" };
+
+                // st === 2 (canceled) / 3 (defeated) / 6 (expired) → archive
+                if (st === 2 || st === 3 || st === 6) {
+                  return { ...r, lifecycle_phase: "archived" as const, status: st === 2 ? "Canceled" : st === 6 ? "Expired" : "Defeated" };
+                }
+                if (st === null) {
+                  // Current Governor can't resolve this id → belongs to a previous Governor.
+                  return { ...r, lifecycle_phase: "archived" as const, status: "Legacy Governor" };
+                }
+                return { ...r, lifecycle_phase: "archived" as const, status: r.status ?? "Archived" };
               } catch (chainErr: any) {
-                console.error(`[TELEMETRY_BUCKET][ERROR] Failed to read chain state for ${r.on_chain_id}: ${chainErr.message}`);
-                return null;
+                console.error(`[TELEMETRY_BUCKET][ARCHIVED] Chain read failed for ${r.on_chain_id}: ${chainErr?.message}. Treating as legacy-governor archive.`);
+                return { ...r, lifecycle_phase: "archived" as const, status: "Legacy Governor" };
               }
             }),
           );
-          
-          const order = { active: 0, pending: 1, succeeded: 2, queued: 3, executed: 4, draft: 5 } as const;
-          
+
+          const order: Record<string, number> = { active: 0, pending: 1, succeeded: 2, queued: 3, executed: 4, draft: 5, archived: 6 };
+
           if (isMounted) {
             setItems(
-              stateChecks
-                .filter((x): x is ProposalLite => x !== null)
-                .sort((a, b) => order[a.lifecycle_phase] - order[b.lifecycle_phase]),
+              (stateChecks as ProposalLite[]).sort(
+                (a, b) => (order[a.lifecycle_phase] ?? 99) - (order[b.lifecycle_phase] ?? 99),
+              ),
             );
           }
+
         }
         console.log("[LIFECYCLE_TELEMETRY][FETCH][END:OK] Telemetry feed hydrated successfully.");
         s.ok({ count: data?.length });

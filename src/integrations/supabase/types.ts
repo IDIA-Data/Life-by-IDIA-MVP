@@ -1559,6 +1559,136 @@ export type Database = {
         }
         Relationships: []
       }
+      dao_execution_events: {
+        Row: {
+          actor_id: string | null
+          created_at: string
+          event_type: string
+          id: string
+          payload: Json
+          task_id: string
+        }
+        Insert: {
+          actor_id?: string | null
+          created_at?: string
+          event_type: string
+          id?: string
+          payload?: Json
+          task_id: string
+        }
+        Update: {
+          actor_id?: string | null
+          created_at?: string
+          event_type?: string
+          id?: string
+          payload?: Json
+          task_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dao_execution_events_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "dao_execution_tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      dao_execution_extensions: {
+        Row: {
+          created_at: string
+          extension_onchain_id: string | null
+          extension_proposal_id: string | null
+          id: string
+          reason: string
+          requested_seconds: number
+          resolved_at: string | null
+          state: string
+          task_id: string
+        }
+        Insert: {
+          created_at?: string
+          extension_onchain_id?: string | null
+          extension_proposal_id?: string | null
+          id?: string
+          reason: string
+          requested_seconds: number
+          resolved_at?: string | null
+          state?: string
+          task_id: string
+        }
+        Update: {
+          created_at?: string
+          extension_onchain_id?: string | null
+          extension_proposal_id?: string | null
+          id?: string
+          reason?: string
+          requested_seconds?: number
+          resolved_at?: string | null
+          state?: string
+          task_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dao_execution_extensions_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "dao_execution_tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      dao_execution_tasks: {
+        Row: {
+          assignee_id: string | null
+          category: string | null
+          created_at: string
+          execution_deadline_at: string | null
+          execution_tx_hash: string | null
+          failure_reason: string | null
+          granted_extension_seconds: number
+          id: string
+          initial_deadline_at: string | null
+          onchain_proposal_id: string | null
+          proposal_id: string
+          status: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          assignee_id?: string | null
+          category?: string | null
+          created_at?: string
+          execution_deadline_at?: string | null
+          execution_tx_hash?: string | null
+          failure_reason?: string | null
+          granted_extension_seconds?: number
+          id?: string
+          initial_deadline_at?: string | null
+          onchain_proposal_id?: string | null
+          proposal_id: string
+          status?: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          assignee_id?: string | null
+          category?: string | null
+          created_at?: string
+          execution_deadline_at?: string | null
+          execution_tx_hash?: string | null
+          failure_reason?: string | null
+          granted_extension_seconds?: number
+          id?: string
+          initial_deadline_at?: string | null
+          onchain_proposal_id?: string | null
+          proposal_id?: string
+          status?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       dao_hats: {
         Row: {
           created_at: string | null
@@ -1647,7 +1777,7 @@ export type Database = {
           description: string | null
           escrow_target: string | null
           id: string
-          onchain_proposal_id: number | null
+          onchain_proposal_id: string | null
           processed_at: string | null
           status: string | null
           timelock_expires_at: string
@@ -1662,7 +1792,7 @@ export type Database = {
           description?: string | null
           escrow_target?: string | null
           id?: string
-          onchain_proposal_id?: number | null
+          onchain_proposal_id?: string | null
           processed_at?: string | null
           status?: string | null
           timelock_expires_at: string
@@ -1677,7 +1807,7 @@ export type Database = {
           description?: string | null
           escrow_target?: string | null
           id?: string
-          onchain_proposal_id?: number | null
+          onchain_proposal_id?: string | null
           processed_at?: string | null
           status?: string | null
           timelock_expires_at?: string
@@ -5280,6 +5410,42 @@ export type Database = {
           },
         ]
       }
+      nano_bite_executions: {
+        Row: {
+          action: string
+          carton_code: string
+          created_at: string
+          id: string
+          nano_bite_id: string
+          payload: Json
+          screen: string
+          sub_module_id: string
+          user_id: string | null
+        }
+        Insert: {
+          action: string
+          carton_code: string
+          created_at?: string
+          id?: string
+          nano_bite_id: string
+          payload?: Json
+          screen: string
+          sub_module_id: string
+          user_id?: string | null
+        }
+        Update: {
+          action?: string
+          carton_code?: string
+          created_at?: string
+          id?: string
+          nano_bite_id?: string
+          payload?: Json
+          screen?: string
+          sub_module_id?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       nfc_transactions: {
         Row: {
           blockchain_hash: string | null
@@ -6899,6 +7065,27 @@ export type Database = {
         }
         Relationships: []
       }
+      relayer_mutex: {
+        Row: {
+          expires_at: string | null
+          id: string
+          locked_at: string | null
+          locked_by: string | null
+        }
+        Insert: {
+          expires_at?: string | null
+          id: string
+          locked_at?: string | null
+          locked_by?: string | null
+        }
+        Update: {
+          expires_at?: string | null
+          id?: string
+          locked_at?: string | null
+          locked_by?: string | null
+        }
+        Relationships: []
+      }
       remediation_plans: {
         Row: {
           actions: Json
@@ -7105,6 +7292,42 @@ export type Database = {
         }
         Relationships: []
       }
+      settlement_ledger_repair_queue: {
+        Row: {
+          blockchain_tx_hash: string | null
+          created_at: string
+          error: string | null
+          id: string
+          payload: Json | null
+          phase: string
+          reference_id: string
+          resolved_at: string | null
+          user_id: string
+        }
+        Insert: {
+          blockchain_tx_hash?: string | null
+          created_at?: string
+          error?: string | null
+          id?: string
+          payload?: Json | null
+          phase: string
+          reference_id: string
+          resolved_at?: string | null
+          user_id: string
+        }
+        Update: {
+          blockchain_tx_hash?: string | null
+          created_at?: string
+          error?: string | null
+          id?: string
+          payload?: Json | null
+          phase?: string
+          reference_id?: string
+          resolved_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       settlement_locks: {
         Row: {
           lock_key: string
@@ -7125,24 +7348,39 @@ export type Database = {
       }
       settlement_queue: {
         Row: {
+          attempts: number
+          completed_at: string | null
           created_at: string | null
           id: string
+          last_attempt_at: string | null
+          last_error: string | null
           payload: Json
           reference_id: string
+          skipped_contributors: Json | null
           status: string | null
         }
         Insert: {
+          attempts?: number
+          completed_at?: string | null
           created_at?: string | null
           id?: string
+          last_attempt_at?: string | null
+          last_error?: string | null
           payload: Json
           reference_id: string
+          skipped_contributors?: Json | null
           status?: string | null
         }
         Update: {
+          attempts?: number
+          completed_at?: string | null
           created_at?: string | null
           id?: string
+          last_attempt_at?: string | null
+          last_error?: string | null
           payload?: Json
           reference_id?: string
+          skipped_contributors?: Json | null
           status?: string | null
         }
         Relationships: []
@@ -7994,6 +8232,120 @@ export type Database = {
         }
         Relationships: []
       }
+      team_distributions: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          error_message: string | null
+          id: string
+          immediate_amount: string | null
+          immediate_percent: number
+          immediate_tx_hash: string | null
+          status: string
+          total_idia: string
+          vesting_amount: string | null
+          vesting_deposit_tx_hash: string | null
+          vesting_pull_tx_hash: string | null
+          vesting_start: string
+          wallet_address: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          immediate_amount?: string | null
+          immediate_percent: number
+          immediate_tx_hash?: string | null
+          status?: string
+          total_idia: string
+          vesting_amount?: string | null
+          vesting_deposit_tx_hash?: string | null
+          vesting_pull_tx_hash?: string | null
+          vesting_start: string
+          wallet_address: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          immediate_amount?: string | null
+          immediate_percent?: number
+          immediate_tx_hash?: string | null
+          status?: string
+          total_idia?: string
+          vesting_amount?: string | null
+          vesting_deposit_tx_hash?: string | null
+          vesting_pull_tx_hash?: string | null
+          vesting_start?: string
+          wallet_address?: string
+        }
+        Relationships: []
+      }
+      team_forfeitures: {
+        Row: {
+          beneficiary_address: string
+          created_at: string
+          id: string
+          treasury_address: string
+          tx_hash: string | null
+          unvested_returned: string
+          vested_delivered: string
+        }
+        Insert: {
+          beneficiary_address: string
+          created_at?: string
+          id?: string
+          treasury_address: string
+          tx_hash?: string | null
+          unvested_returned: string
+          vested_delivered: string
+        }
+        Update: {
+          beneficiary_address?: string
+          created_at?: string
+          id?: string
+          treasury_address?: string
+          tx_hash?: string | null
+          unvested_returned?: string
+          vested_delivered?: string
+        }
+        Relationships: []
+      }
+      team_vesting_pushes: {
+        Row: {
+          amount: string
+          beneficiary_address: string
+          block_number: number
+          created_at: string
+          id: string
+          months_unlocked: number
+          total_claimed: string
+          tx_hash: string
+        }
+        Insert: {
+          amount: string
+          beneficiary_address: string
+          block_number: number
+          created_at?: string
+          id?: string
+          months_unlocked: number
+          total_claimed: string
+          tx_hash: string
+        }
+        Update: {
+          amount?: string
+          beneficiary_address?: string
+          block_number?: number
+          created_at?: string
+          id?: string
+          months_unlocked?: number
+          total_claimed?: string
+          tx_hash?: string
+        }
+        Relationships: []
+      }
       telemetry_logs: {
         Row: {
           created_at: string | null
@@ -8834,6 +9186,39 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      vault_notes: {
+        Row: {
+          content: string
+          created_at: string
+          id: string
+          tags: string[]
+          title: string
+          tsv: unknown
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          content?: string
+          created_at?: string
+          id?: string
+          tags?: string[]
+          title: string
+          tsv?: unknown
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          id?: string
+          tags?: string[]
+          title?: string
+          tsv?: unknown
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       vesting_pushes: {
         Row: {
@@ -10377,6 +10762,10 @@ export type Database = {
       }
     }
     Functions: {
+      acquire_relayer_lock: {
+        Args: { run_id: string; timeout_seconds?: number }
+        Returns: boolean
+      }
       anonymize_location: {
         Args: { lat: number; lng: number }
         Returns: string
@@ -10469,6 +10858,7 @@ export type Database = {
       }
       get_average_rating: { Args: { p_ratee_id: string }; Returns: number }
       get_hub_balance: { Args: { uid: string }; Returns: number }
+      get_omni_aggregates: { Args: { pseudo_id: string }; Returns: Json }
       get_real_library_yield: {
         Args: never
         Returns: {
@@ -10496,6 +10886,25 @@ export type Database = {
         Returns: string
       }
       get_vulture_salt: { Args: never; Returns: string }
+      governance_global_egress_latency: {
+        Args: { p_since: string }
+        Returns: {
+          created_at: string
+          id: string
+          settled_at: string
+        }[]
+      }
+      governance_global_treasury_flows: {
+        Args: never
+        Returns: {
+          amount: number
+          created_at: string
+          description: string
+          entry_type: string
+          id: string
+          metadata: Json
+        }[]
+      }
       grant_hat: {
         Args: { _hat_type: string; _target_user: string }
         Returns: string
@@ -10683,6 +11092,7 @@ export type Database = {
         Args: { _application_id: string }
         Returns: number
       }
+      release_relayer_lock: { Args: { run_id: string }; Returns: undefined }
       revoke_employee: {
         Args: { _employee_id: string }
         Returns: {
@@ -10802,6 +11212,25 @@ export type Database = {
         }
         Returns: boolean
       }
+      vault_note_append: {
+        Args: { p_content: string; p_note_id: string }
+        Returns: {
+          content: string
+          created_at: string
+          id: string
+          tags: string[]
+          title: string
+          tsv: unknown
+          updated_at: string
+          user_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "vault_notes"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
     }
     Enums: {
       idia_account_type: "individual" | "business" | "enterprise"
@@ -10835,6 +11264,7 @@ export type Database = {
         | "hub_protocol_fee"
         | "synapse_purchase"
         | "."
+        | "idia_royalty_yield"
       sync_status: "pending" | "processing" | "completed" | "failed"
       user_role: "leadership" | "manager" | "employee" | "csuite"
     }
@@ -10997,6 +11427,7 @@ export const Constants = {
         "hub_protocol_fee",
         "synapse_purchase",
         ".",
+        "idia_royalty_yield",
       ],
       sync_status: ["pending", "processing", "completed", "failed"],
       user_role: ["leadership", "manager", "employee", "csuite"],

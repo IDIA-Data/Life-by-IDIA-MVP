@@ -57,6 +57,24 @@ const Auth = () => {
     return () => subscription.unsubscribe();
   }, [navigate, searchParams, isResetMode, toast]);
 
+  // ── Native iOS ASWebAuthenticationSession cancellation/success bridge ──
+  useEffect(() => {
+    const handleNativeAuthMessage = (event: MessageEvent) => {
+      const type = event?.data?.type;
+      if (type === "IDIA_AUTH_CANCELLED") {
+        console.log("[NATIVE_BRIDGE] Auth cancelled by user or failed.");
+        setIsLoading(false);
+        toast({ title: "Sign in cancelled", description: "Please try again when you're ready." });
+      } else if (type === "IDIA_AUTH_COMPLETE") {
+        console.log("[NATIVE_BRIDGE] Auth handshake completed.");
+        setIsLoading(false);
+      }
+    };
+    window.addEventListener("message", handleNativeAuthMessage);
+    return () => window.removeEventListener("message", handleNativeAuthMessage);
+  }, [toast]);
+
+
   // ==========================================
   // 1. STANDARD AUTH (LOGIN / SIGNUP / OAUTH)
   // ==========================================

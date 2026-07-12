@@ -53,70 +53,85 @@ const CommitteeRosterModal: React.FC<Props> = ({
     if (!committee) return;
     setLoading(true);
     try {
-      // 1. Officers with this committee's hat
-      const { data: hats, error: hatsErr } = await (supabase as any)
-        .from("dao_hats")
-        .select("user_id, eligibility_status, veto_window_end")
-        .eq("hat_type", committee.id)
-        .is("revoked_at", null);
-      if (hatsErr) throw hatsErr;
-      const userIds = Array.from(new Set((hats || []).map((h: any) => h.user_id)));
+      // 1. Officers with this committee's hat + all active tophat (L3) holders,
+      //    who are honorary officers of every committee.
+      const [hatsRes, tophatHoldersRes] = await Promise.all([
+        (supabase as any)
+          .from("dao_hats")
+          .select("user_id, eligibility_status, veto_window_end")
+          .eq("hat_type", committee.id)
+          .is("revoked_at", null),
+        (supabase as any)
+          .from("dao_hats")
+          .select("user_id")
+          .eq("hat_type", "tophat")
+          .eq("eligibility_status", "active")
+          .is("revoked_at", null),
+      ]);
+      if (hatsRes.error) throw hatsRes.error;
+      const hats = hatsRes.data || [];
+      const tophatHolders = new Set<string>(
+        (tophatHoldersRes.data || []).map((r: any) => r.user_id),
+      );
 
-      // 2. Active oversight_chair + tophat holders among these users (drives true level)
+      const explicitUserIds = new Set<string>(hats.map((h: any) => h.user_id));
+      const allUserIds = Array.from(new Set<string>([...explicitUserIds, ...tophatHolders]));
+
+      // 2. Active oversight_chair among these users (drives true level for explicit hat holders)
       let chairs = new Set<string>();
-      let tophats = new Set<string>();
-      if (userIds.length > 0) {
-        const [chairRes, tophatRes] = await Promise.all([
-          (supabase as any)
-            .from("dao_hats")
-            .select("user_id")
-            .eq("hat_type", "oversight_chair")
-            .eq("eligibility_status", "active")
-            .is("revoked_at", null)
-            .in("user_id", userIds),
-          (supabase as any)
-            .from("dao_hats")
-            .select("user_id")
-            .eq("hat_type", "tophat")
-            .eq("eligibility_status", "active")
-            .is("revoked_at", null)
-            .in("user_id", userIds),
-        ]);
+      if (allUserIds.length > 0) {
+        const chairRes = await (supabase as any)
+          .from("dao_hats")
+          .select("user_id")
+          .eq("hat_type", "oversight_chair")
+          .eq("eligibility_status", "active")
+          .is("revoked_at", null)
+          .in("user_id", allUserIds);
         chairs = new Set((chairRes.data || []).map((r: any) => r.user_id));
-        tophats = new Set((tophatRes.data || []).map((r: any) => r.user_id));
       }
 
       // 3. Wallet addresses (zero-PII safe identifier)
       let wallets: Record<string, string | null> = {};
-      if (userIds.length > 0) {
+      if (allUserIds.length > 0) {
         const { data: profs } = await (supabase as any)
           .from("member_wallet_directory")
           .select("user_id, wallet_address")
-          .in("user_id", userIds);
+          .in("user_id", allUserIds);
         (profs || []).forEach((p: any) => (wallets[p.user_id] = p.wallet_address ?? null));
       }
 
-      const list: Member[] = (hats || []).map((h: any) => {
+      const list: Member[] = [];
+      // Explicit committee hat holders
+      hats.forEach((h: any) => {
         const isActive = h.eligibility_status === "active";
-        // Build the user's active-hat set and derive the canonical Ascension
-        // Level via the single source of truth (handles tophat → L3).
         const hatSet = new Set<string>();
         if (isActive) {
           hatSet.add(committee.id);
           if (chairs.has(h.user_id)) hatSet.add("oversight_chair");
-          if (tophats.has(h.user_id)) hatSet.add("tophat");
+          if (tophatHolders.has(h.user_id)) hatSet.add("tophat");
         }
         const level: AscensionLevel = isActive ? getAscensionLevel(hatSet) : (0 as AscensionLevel);
-        return {
+        list.push({
           userId: h.user_id,
           walletAddress: wallets[h.user_id] ?? null,
           level,
           status: isActive ? "active" : "pending_veto",
           vetoWindowEnd: h.veto_window_end,
-        };
+        });
+      });
+      // Honorary L3 entries: tophat holders WITHOUT an explicit committee hat
+      tophatHolders.forEach((uid) => {
+        if (explicitUserIds.has(uid)) return;
+        list.push({
+          userId: uid,
+          walletAddress: wallets[uid] ?? null,
+          level: 3 as AscensionLevel,
+          status: "active",
+          vetoWindowEnd: null,
+        });
       });
 
-      // sort: L2 first, then L1, pending last
+      // sort: L3 first, then L2, L1, pending last
       list.sort((a, b) => (b.level - a.level));
       setMembers(list);
     } catch (e: any) {

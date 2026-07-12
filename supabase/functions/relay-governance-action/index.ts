@@ -105,17 +105,34 @@ const NETWORKS: Record<
   8453: {
     name: "Base",
     rpcUrlFallback: "https://mainnet.base.org",
-<<<<<<< Updated upstream
-    governor: "0x9777067CAd2892D20decAF1a5ccb78e6B291B87a",
-=======
-    governor: Deno.env.get("GOVERNOR_ADDRESS") || "0x9777067CAd2892D20decAF1a5ccb78e6B291B87a",
->>>>>>> Stashed changes
+    governor: Deno.env.get("GOVERNOR_ADDRESS") || "0xc59120a33C9baeF4ee10847e403221C1040773d9",
     targets: {
       team: "0xF0E67683783ef5879b43ef99ab04Bc27A9a71074",
       ecosystem: "0xd052C6F3846b4Fe56E579880Ec9ea2764ABDe708",
     },
   },
 };
+
+/**
+ * Resolve the active Governor address. Prefer the Supabase edge function
+ * secret GOVERNOR_ADDRESS so on-chain redeploys can be hot-swapped without
+ * a code release. Falls back to the literal in NETWORKS when the secret
+ * is missing or fails address validation.
+ */
+function resolveGovernorAddress(fallback: string): { address: string; source: "env" | "fallback" } {
+  const fromEnv = Deno.env.get("GOVERNOR_ADDRESS");
+  if (fromEnv && ethers.isAddress(fromEnv)) {
+    return { address: ethers.getAddress(fromEnv), source: "env" };
+  }
+  if (fromEnv) {
+    console.error(
+      `[GOV_RELAY][BOOT][WARN] GOVERNOR_ADDRESS env var present but invalid (${fromEnv}); using literal fallback.`,
+    );
+  } else {
+    console.warn("[GOV_RELAY][BOOT][WARN] GOVERNOR_ADDRESS env var missing; using literal fallback.");
+  }
+  return { address: fallback, source: "fallback" };
+}
 
 const ALLOWED_ACTIONS = new Set(["APPROVE_AND_EXECUTE", "CAST_VOTE", "CANCEL_PROPOSAL"]);
 const ALLOWED_TARGETS = new Set(["team", "ecosystem"]);
@@ -322,7 +339,12 @@ serve(async (req) => {
     stage = "CONNECT_BLOCKCHAIN";
     console.log(`[GOV_RELAY][${stage}][START] Initializing JSON-RPC provider.`);
 
-    const networkConfig = NETWORKS[networkId]!;
+    const baseNetworkConfig = NETWORKS[networkId]!;
+    const { address: resolvedGovernor, source: governorSource } = resolveGovernorAddress(
+      baseNetworkConfig.governor,
+    );
+    const networkConfig = { ...baseNetworkConfig, governor: resolvedGovernor };
+    console.log(`[GOV_RELAY][BOOT] governor=${resolvedGovernor} source=${governorSource}`);
     const rpcUrl = Deno.env.get("ALCHEMY_BASE_RPC_URL") || networkConfig.rpcUrlFallback;
     console.log(`[GOV_RELAY][RPC_SETUP][URL] using=${rpcUrl.includes("alchemy") ? "alchemy" : "public-base"}`);
     const relayerKey = Deno.env.get("RELAYER_PRIVATE_KEY");

@@ -111,7 +111,7 @@ const ShopScreen = () => {
     );
 
   return (
-    <div className="space-y-6 bg-white min-h-screen pb-20">
+    <div className="space-y-6 bg-background min-h-screen pb-20">
       {!selectedBusiness ? (
         <div className="animate-fade-in">
           <div className="px-4 space-y-4 pt-4">
@@ -119,7 +119,7 @@ const ShopScreen = () => {
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 placeholder="Find your favorite shop here..."
-                className="pl-10 h-12 bg-white border-teal-100 shadow-sm rounded-2xl"
+                className="pl-10 h-12 bg-card border-teal-100 shadow-sm rounded-2xl"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
@@ -130,7 +130,7 @@ const ShopScreen = () => {
                   key={cat}
                   variant={selectedCategory === cat ? "default" : "outline"}
                   className={`cursor-pointer px-4 py-1.5 whitespace-nowrap transition-all border-teal-50 ${
-                    selectedCategory === cat ? "bg-teal-600 text-white" : "bg-white text-muted-foreground"
+                    selectedCategory === cat ? "bg-teal-600 text-white" : "bg-card text-muted-foreground"
                   }`}
                   onClick={() => setSelectedCategory(cat as string)}
                 >
@@ -157,7 +157,7 @@ const ShopScreen = () => {
                       fetchInventory(business.id);
                     }}
                   >
-                    <div className="aspect-square w-full rounded-2xl bg-white border border-teal-50 flex items-center justify-center shadow-sm overflow-hidden transition-all hover:border-teal-300">
+                    <div className="aspect-square w-full rounded-2xl bg-card border border-teal-50 flex items-center justify-center shadow-sm overflow-hidden transition-all hover:border-teal-300">
                       {business.logo_url ? (
                         <img src={business.logo_url} alt={business.name} className="w-full h-full object-cover" />
                       ) : (
@@ -175,7 +175,7 @@ const ShopScreen = () => {
         </div>
       ) : (
         <div className="animate-in slide-in-from-right duration-300">
-          <div className="p-4 bg-white sticky top-0 z-10 border-b flex items-center justify-between border-muted">
+          <div className="p-4 bg-background sticky top-0 z-10 border-b flex items-center justify-between border-muted">
             <Button variant="ghost" size="icon" onClick={() => setSelectedBusiness(null)}>
               <X className="h-6 w-6" />
             </Button>
@@ -223,7 +223,7 @@ const ShopScreen = () => {
                 <h3 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">LIVE_LEDGER</h3>
                 <Badge
                   variant="outline"
-                  className="text-[8px] border-teal-100 text-teal-600 font-black tracking-widest uppercase bg-white"
+                  className="text-[8px] border-teal-100 text-teal-600 font-black tracking-widest uppercase bg-card"
                 >
                   1:1_SYNC
                 </Badge>
@@ -233,7 +233,7 @@ const ShopScreen = () => {
                 {businessItems.map((item) => (
                   <Card
                     key={item.id}
-                    className="overflow-hidden border-teal-50 bg-white shadow-sm rounded-2xl transition-all active:scale-95"
+                    className="overflow-hidden border-teal-50 bg-card shadow-sm rounded-2xl transition-all active:scale-95"
                   >
                     <div className="aspect-square bg-muted/10 flex items-center justify-center relative">
                       {item.image_url ? (

@@ -350,7 +350,7 @@ const LifeScreen: React.FC = () => {
 
         <TabsContent value="overview" className="flex-1 min-h-0 overflow-hidden m-0">
           <div className="h-full flex flex-col gap-2">
-            <Card className="bg-white border-teal-100 shadow-sm flex-1 min-h-0 overflow-hidden">
+            <Card className="bg-card border-border shadow-sm flex-1 min-h-0 overflow-hidden">
               <CardContent className="p-4 h-full">
                 <div className="flex flex-col items-center gap-3 h-full">
                   <StandingOrb score={profile?.trust_score ?? null} size={170} />
@@ -376,7 +376,7 @@ const LifeScreen: React.FC = () => {
                           <ArrowRight className="w-4 h-4 ml-2" />
                         </Button>
                       </DialogTrigger>
-                      <DialogContent className="max-w-5xl w-[95vw] max-h-[90vh] overflow-y-auto bg-white p-0 border-none">
+                      <DialogContent className="max-w-5xl w-[95vw] max-h-[90vh] overflow-y-auto bg-card p-0 border-none">
                         <PsychometricTestingCenter
                           onCompleteAll={handleCalculateScore}
                           onCancel={() => setShowTestModal(false)}
@@ -413,7 +413,7 @@ const LifeScreen: React.FC = () => {
             </Card>
 
             <div className="grid grid-cols-3 gap-2 shrink-0">
-              <Card className="bg-white border-none shadow-sm">
+              <Card className="bg-card border-none shadow-sm">
                 <CardContent className="p-2 flex flex-col items-center">
                   <Heart className="w-3.5 h-3.5 text-orange-500" />
                   <span className="text-[10px] text-muted-foreground mt-0.5">Reciprocity</span>
@@ -422,7 +422,7 @@ const LifeScreen: React.FC = () => {
                   </span>
                 </CardContent>
               </Card>
-              <Card className="bg-white border-none shadow-sm">
+              <Card className="bg-card border-none shadow-sm">
                 <CardContent className="p-2 flex flex-col items-center">
                   <TrendingUp className="w-3.5 h-3.5 text-emerald-500" />
                   <span className="text-[10px] text-muted-foreground mt-0.5">Vitality</span>
@@ -431,7 +431,7 @@ const LifeScreen: React.FC = () => {
                   </span>
                 </CardContent>
               </Card>
-              <Card className="bg-white border-none shadow-sm">
+              <Card className="bg-card border-none shadow-sm">
                 <CardContent className="p-2 flex flex-col items-center">
                   <Users className="w-3.5 h-3.5 text-teal-600" />
                   <span className="text-[10px] text-muted-foreground mt-0.5">Network</span>
@@ -445,7 +445,7 @@ const LifeScreen: React.FC = () => {
         </TabsContent>
 
         <TabsContent value="friends" className="flex-1 min-h-0 overflow-hidden m-0">
-          <Card className="bg-white shadow-sm border-none h-full flex flex-col">
+          <Card className="bg-card shadow-sm border-none h-full flex flex-col">
             <CardHeader className="shrink-0">
               <CardTitle className="text-foreground text-base">Your Connections</CardTitle>
             </CardHeader>
@@ -520,7 +520,7 @@ const LifeScreen: React.FC = () => {
         </TabsContent>
 
         <TabsContent value="circles" className="flex-1 min-h-0 overflow-hidden m-0">
-          <Card className="bg-white shadow-sm border-none h-full flex flex-col">
+          <Card className="bg-card shadow-sm border-none h-full flex flex-col">
             <CardHeader className="shrink-0">
               <CardTitle className="text-foreground text-base">Trust Circles</CardTitle>
             </CardHeader>
@@ -548,7 +548,7 @@ const LifeScreen: React.FC = () => {
         </TabsContent>
 
         <TabsContent value="deeds" className="flex-1 min-h-0 overflow-hidden m-0">
-          <Card className="bg-white shadow-sm border-none h-full flex flex-col">
+          <Card className="bg-card shadow-sm border-none h-full flex flex-col">
             <CardHeader className="shrink-0">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-foreground text-base">Good Deeds</CardTitle>
@@ -569,7 +569,7 @@ const LifeScreen: React.FC = () => {
                       Submit Deed
                     </Button>
                   </DialogTrigger>
-                  <DialogContent className="bg-white">
+                  <DialogContent className="bg-card">
                     <DialogHeader>
                       <DialogTitle>Submit a Good Deed</DialogTitle>
                     </DialogHeader>
@@ -627,7 +627,7 @@ const LifeScreen: React.FC = () => {
               ) : (
                 <div className="space-y-3">
                   {goodDeeds.map((deed) => (
-                    <div key={deed.id} className="p-4 border border-teal-50 rounded-lg bg-white space-y-2">
+                    <div key={deed.id} className="p-4 border border-teal-50 rounded-lg bg-card space-y-2">
                       <div className="flex items-center justify-between">
                         <h4 className="font-medium text-foreground">{deed.title}</h4>
                         {getStatusBadge(deed.verification_status)}

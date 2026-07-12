@@ -155,10 +155,18 @@ const HatsWardrobe: React.FC = () => {
       <div className="flex gap-3 overflow-x-auto pb-2 px-1 scrollbar-hide">
         {allTypes.map((t) => {
           const meta = HAT_META[t];
-          const wearer = hats.find((h) => h.hat_type === t);
+          const realWearer = hats.find((h) => h.hat_type === t);
+          // L3 Tophat override — a Protocol Steward is an honorary active holder of every committee hat.
+          const tophatActive = hats.some(
+            (h) => h.hat_type === "tophat" && h.eligibility_status === "active",
+          );
+          const isCommitteeHat = t !== "tophat";
+          const synthesizedByTophat = !realWearer && isCommitteeHat && tophatActive;
+          const wearer = realWearer;
 
           // Default to severed (unowned) if the user doesn't hold the hat
-          const status = wearer?.eligibility_status ?? "severed";
+          const status: Eligibility =
+            wearer?.eligibility_status ?? (synthesizedByTophat ? "active" : "severed");
           const active = status === "active";
           const grayed = status === "grayed";
 

@@ -20,7 +20,12 @@ const platform = () => Capacitor.getPlatform();
 
 async function probeMedia(kind: "audio" | "video"): Promise<PermissionResult> {
   const key: HardwareKey = kind === "audio" ? "microphone" : "camera";
+  const isNative = Capacitor.isNativePlatform();
+
   if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) {
+    // On native, the Swift/Kotlin bridge owns hardware access — the OS will
+    // prompt on first real use. Never mark as unsupported.
+    if (isNative) return { key, state: "prompt", message: "Native bridge handles OS prompt" };
     return { key, state: "unsupported", message: "MediaDevices API not available" };
   }
   try {
@@ -29,7 +34,9 @@ async function probeMedia(kind: "audio" | "video"): Promise<PermissionResult> {
     return { key, state: "granted" };
   } catch (err: any) {
     const denied = err?.name === "NotAllowedError" || err?.name === "PermissionDeniedError";
-    return { key, state: denied ? "denied" : "prompt", message: err?.message };
+    if (denied) return { key, state: "denied", message: err?.message };
+    // NotFoundError, sandboxed iframe, transient failures — never cache as unsupported.
+    return { key, state: "prompt", message: err?.message };
   }
 }
 

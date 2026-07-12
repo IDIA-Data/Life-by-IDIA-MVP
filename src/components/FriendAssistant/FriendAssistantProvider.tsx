@@ -1,8 +1,8 @@
-import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, useCallback, Suspense, lazy } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import CollapsedAvatar from './CollapsedAvatar';
 import ExpandedChat from './ExpandedChat';
-import SovereignVisualizer from './SovereignVisualizer'; 
+const SovereignVisualizer = lazy(() => import('./SovereignVisualizer'));
 import { FriendState, Message } from './types';
 import { getContextualGreeting } from './orbUtils';
 import { useSyllableBlinking } from './useSyllableBlinking';
@@ -420,10 +420,12 @@ export const FriendAssistantProvider: React.FC<{ children: React.ReactNode }> = 
           )}
 
           <div className="absolute inset-0 z-10 pointer-events-none">
-            <SovereignVisualizer 
-              state={friendState} 
-              severity={trigger === 'achievement' ? 'important' : 'normal'} 
-            />
+            <Suspense fallback={null}>
+              <SovereignVisualizer
+                state={friendState}
+                severity={trigger === 'achievement' ? 'important' : 'normal'}
+              />
+            </Suspense>
           </div>
 
           <div className="absolute top-16 w-full px-8 flex justify-between items-center z-50">

@@ -123,8 +123,27 @@ const CommitteesList: React.FC = () => {
       const myHats = new Set<string>();
       const myPending: Record<string, string> = {};
 
+      // First pass: identify all active tophat (L3 Protocol Steward) holders.
+      // Tophat holders are honorary officers of every committee.
+      const tophatUserIds = new Set<string>();
       hatsRes.data?.forEach((h: any) => {
-        counts[h.hat_type] = (counts[h.hat_type] || 0) + 1;
+        if (h.hat_type === "tophat" && h.eligibility_status === "active") {
+          tophatUserIds.add(h.user_id);
+        }
+      });
+
+      hatsRes.data?.forEach((h: any) => {
+        // Per-committee officer count: skip tophat (counted separately),
+        // skip inactive rows, and skip explicit committee hats held by a
+        // tophat holder to avoid double-counting them below.
+        const isCommitteeHat = h.hat_type !== "tophat" && h.hat_type !== "oversight_chair";
+        if (
+          isCommitteeHat &&
+          h.eligibility_status === "active" &&
+          !tophatUserIds.has(h.user_id)
+        ) {
+          counts[h.hat_type] = (counts[h.hat_type] || 0) + 1;
+        }
         if (h.user_id === user.id) {
           if (h.eligibility_status === "active") myHats.add(h.hat_type);
           else if (h.eligibility_status === "pending_veto") {
@@ -132,6 +151,11 @@ const CommitteesList: React.FC = () => {
           }
         }
         hatMap[h.hat_type] = h;
+      });
+
+      // Add tophat holders as honorary officers of every committee.
+      COMMITTEES_META.forEach((c) => {
+        counts[c.id] = (counts[c.id] || 0) + tophatUserIds.size;
       });
 
       const appMap: Record<string, any> = {};
@@ -425,7 +449,7 @@ const CommitteesList: React.FC = () => {
                           {activeMembers} Active Officer{activeMembers === 1 ? "" : "s"}
                         </span>
                         <span className="text-[10px] text-muted-foreground font-medium">{pathwayText}</span>
-                        {ascensionLevel === 3 && (
+                        {(userActiveHats.size > 0 || ascensionLevel >= 2) && (
                           <button
                             type="button"
                             onClick={() => setRosterTarget(committee)}

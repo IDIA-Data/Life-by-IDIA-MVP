@@ -17,7 +17,23 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { ethers } from "npm:ethers@6.13.0";
 
-const GOVERNOR_ADDRESS = "0x9777067CAd2892D20decAF1a5ccb78e6B291B87a";
+// Fallback only — request-time resolver below prefers Deno.env.get("GOVERNOR_ADDRESS").
+const GOVERNOR_ADDRESS_FALLBACK = "0xc59120a33C9baeF4ee10847e403221C1040773d9";
+
+function resolveGovernorAddress(): { address: string; source: "env" | "fallback" } {
+  const fromEnv = Deno.env.get("GOVERNOR_ADDRESS");
+  if (fromEnv && ethers.isAddress(fromEnv)) {
+    return { address: ethers.getAddress(fromEnv), source: "env" };
+  }
+  if (fromEnv) {
+    console.error(
+      `[INDEXER][BOOT][WARN] GOVERNOR_ADDRESS env var present but invalid (${fromEnv}); using literal fallback.`,
+    );
+  } else {
+    console.warn("[INDEXER][BOOT][WARN] GOVERNOR_ADDRESS env var missing; using literal fallback.");
+  }
+  return { address: GOVERNOR_ADDRESS_FALLBACK, source: "fallback" };
+}
 const BASE_RPC_FALLBACK = "https://mainnet.base.org";
 
 const GOVERNOR_ABI = [
@@ -79,7 +95,9 @@ serve(async (req) => {
 
     const rpcUrl = Deno.env.get("BASE_RPC_URL") ?? BASE_RPC_FALLBACK;
     const provider = new ethers.JsonRpcProvider(rpcUrl, 8453, { staticNetwork: true });
-    const gov = new ethers.Contract(GOVERNOR_ADDRESS, GOVERNOR_ABI, provider);
+    const { address: governorAddress, source: governorSource } = resolveGovernorAddress();
+    console.log(`[INDEXER][BOOT] governor=${governorAddress} source=${governorSource}`);
+    const gov = new ethers.Contract(governorAddress, GOVERNOR_ABI, provider);
 
     // ── LOAD_PENDING ────────────────────────────────────────────────
     console.log("[INDEXER][LOAD_PENDING][START] Fetching un-indexed rows from governance_proposals");
@@ -339,7 +357,100 @@ serve(async (req) => {
 
       console.log(`[INDEXER][DB_WRITE][END:OK] proposal_id=${pid}`);
       anchored.push({ proposal_id: pid, state: stateInt, state_name: stateName });
+
+      // ── DAO_PROPOSALS reconciliation ─────────────────────────────
+      // Mirror terminal / near-terminal states into the app-facing
+      // dao_proposals table so stale "active" rows can never appear
+      // in the Active feed once the chain has moved on.
+      const dbPhase =
+        stateInt === 7 ? "executed"
+        : stateInt === 5 ? "queued"
+        : stateInt === 4 ? "succeeded"
+        : stateInt === 3 ? "defeated"
+        : stateInt === 2 ? "canceled"
+        : stateInt === 6 ? "expired"
+        : null;
+      if (dbPhase) {
+        const { error: daoErr } = await supabaseAdmin
+          .from("dao_proposals")
+          .update({ status: dbPhase, lifecycle_phase: dbPhase })
+          .eq("on_chain_id", pid);
+        if (daoErr) {
+          console.warn(`[INDEXER][DAO_SYNC][WARN] proposal_id=${pid} ${daoErr.message}`);
+        } else {
+          console.log(`[INDEXER][DAO_SYNC][OK] proposal_id=${pid} → ${dbPhase}`);
+        }
+      }
+
+      // ── PENDING_ACTIONS enrolment ────────────────────────────────
+      // Succeeded (4) and Queued (5) enter the Negative Consent
+      // timelock. Insert once, keyed on onchain_proposal_id.
+      if (stateInt === 4 || stateInt === 5) {
+        const { data: existing } = await supabaseAdmin
+          .from("dao_pending_actions")
+          .select("id")
+          .eq("onchain_proposal_id", pid)
+          .maybeSingle();
+        if (!existing) {
+          const title = (row.description || "Governance action").split("\n")[0].slice(0, 200);
+          const { error: pendErr } = await supabaseAdmin
+            .from("dao_pending_actions")
+            .insert({
+              title,
+              description: row.description ?? null,
+              category: "governance",
+              timelock_expires_at: new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString(),
+              onchain_proposal_id: pid,
+              status: "pending",
+            });
+          if (pendErr) {
+            console.warn(`[INDEXER][PENDING_ACTIONS][WARN] proposal_id=${pid} ${pendErr.message}`);
+          } else {
+            console.log(`[INDEXER][PENDING_ACTIONS][OK] proposal_id=${pid} enrolled`);
+          }
+        }
+      }
+
+      // ── EXECUTION_TRACKER enrolment ──────────────────────────────
+      // When a proposal enters Queued (5) it's post-timelock and ready
+      // to execute — surface it in the Delaware MSA Execution Tracker.
+      if (stateInt === 5) {
+        // Find the matching dao_proposals row (if any) to seed title/category.
+        const { data: daoProp } = await supabaseAdmin
+          .from("dao_proposals")
+          .select("id, title, category")
+          .eq("on_chain_id", pid)
+          .maybeSingle();
+        if (daoProp) {
+          const { data: existingTask } = await supabaseAdmin
+            .from("dao_execution_tasks")
+            .select("id")
+            .eq("proposal_id", daoProp.id)
+            .maybeSingle();
+          if (!existingTask) {
+            const deadline = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+            const { error: taskErr } = await supabaseAdmin
+              .from("dao_execution_tasks")
+              .insert({
+                proposal_id: daoProp.id,
+                onchain_proposal_id: pid,
+                title: daoProp.title || (row.description || "Governance action").split("\n")[0].slice(0, 200),
+                category: daoProp.category ?? null,
+                execution_deadline_at: deadline,
+                initial_deadline_at: deadline,
+                status: "ready",
+              });
+            if (taskErr) {
+              console.warn(`[INDEXER][EXECUTION_TRACKER][WARN] proposal_id=${pid} ${taskErr.message}`);
+            } else {
+              console.log(`[INDEXER][EXECUTION_TRACKER][OK] proposal_id=${pid} enrolled`);
+            }
+
+          }
+        }
+      }
     }
+
 
     console.log(
       `[INDEXER][SWEEP][END:OK] processed=${rows.length} anchored=${anchored.length} failed=${failed.length}`,

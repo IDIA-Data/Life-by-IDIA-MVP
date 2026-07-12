@@ -6,7 +6,11 @@ import { Clock, ShieldOff, Zap, Loader2, Fingerprint, Rocket } from "lucide-reac
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { generateACAHash } from "@/utils/acaGenerator";
-import { isNative } from "@/services/platform";
+// Detect the native shell via the same WKWebView bridge probe that generateACAHash uses.
+// Capacitor's isNative() returns false in the pure-WebKit iOS shell, so we can't rely on it.
+const hasNativeEnclaveBridge = () =>
+  typeof window !== "undefined" &&
+  !!(window as any).webkit?.messageHandlers?.triggerBiologicalCapture;
 import { relayGovernanceAction, type EscrowTarget } from "@/services/governanceRelay";
 import { stage } from "@/lib/stageLogger";
 
@@ -108,7 +112,7 @@ const PendingActionsCarousel: React.FC<PendingActionsCarouselProps> = ({ escrowT
 
   const castVeto = async (actionId: string) => {
     console.log(`[VETO_ACTION] START: Initializing Negative Consent sequence for action: ${actionId}`);
-    if (!isNative()) {
+    if (!hasNativeEnclaveBridge()) {
       toast({
         title: "Mobile Device Required",
         description: "Veto actions require Secure Enclave attestation. Please use the iOS or Android app.",

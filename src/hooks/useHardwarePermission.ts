@@ -31,10 +31,18 @@ export function useHardwarePermission() {
   // Hydrate cached OS grant state on mount
   useEffect(() => {
     try {
+      const hasMedia = typeof navigator !== "undefined" && !!navigator.mediaDevices?.getUserMedia;
       const next: any = {};
       (Object.keys(PREF_KEY) as HardwareKey[]).forEach((k) => {
         const cached = localStorage.getItem(LS_GRANT_KEY(k));
-        if (cached) next[k] = cached as PermissionState;
+        if (!cached) return;
+        // Discard stale 'unsupported' for camera/mic — native bridge or a
+        // now-available web API means we should re-prompt instead of blocking.
+        if (cached === "unsupported" && (k === "camera" || k === "microphone") && hasMedia) {
+          try { localStorage.removeItem(LS_GRANT_KEY(k)); } catch { /* no-op */ }
+          return;
+        }
+        next[k] = cached as PermissionState;
       });
       if (Object.keys(next).length) setGrantState((s) => ({ ...s, ...next }));
     } catch { /* sandboxed */ }

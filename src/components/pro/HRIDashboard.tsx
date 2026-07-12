@@ -129,7 +129,7 @@ const HRIDashboard = ({ isMasked = false }: { isMasked?: boolean }) => {
         </Badge>
       </div>
 
-      <div className={`rounded-2xl border border-border bg-white shadow-sm p-4 transition-all`}>
+      <div className={`rounded-2xl border border-border bg-card shadow-sm p-4 transition-all`}>
         <h3 className="text-xs font-bold text-foreground mb-3 uppercase tracking-wider flex items-center gap-1.5">
           <Activity className="w-3.5 h-3.5 text-[hsl(28,80%,55%)]" />
           Occupational Biometrics

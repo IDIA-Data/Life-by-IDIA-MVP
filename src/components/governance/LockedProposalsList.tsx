@@ -52,7 +52,7 @@ const LockedProposalsList: React.FC<Props> = ({ balance, votingPower, refreshTri
 
         const dbProposals = await (supabase as any)
           .from("dao_proposals")
-          .select("id, title, description, status, proposer_id, on_chain_id, lifecycle_phase, created_at")
+          .select("id, title, description, status, proposer_id, on_chain_id, lifecycle_phase, created_at, end_date, committee_id")
           .order("created_at", { ascending: false });
         if (dbProposals.error) throw dbProposals.error;
 
@@ -82,6 +82,8 @@ const LockedProposalsList: React.FC<Props> = ({ balance, votingPower, refreshTri
             on_chain_id: r.on_chain_id ?? null,
             lifecycle_phase: indexed?.stateName ?? r.lifecycle_phase ?? null,
             created_at: r.created_at ?? null,
+            end_date: r.end_date ?? null,
+            committee_id: r.committee_id ?? null,
             indexed_state: indexed?.state ?? null,
           };
         });

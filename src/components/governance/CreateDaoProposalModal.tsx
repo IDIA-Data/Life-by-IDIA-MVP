@@ -55,15 +55,84 @@ export const CreateDaoProposalModal: React.FC<Props> = ({
     setImpact("Medium");
   };
 
+  const wordCount = description.trim().split(/\s+/).filter(Boolean).length;
+  const MIN_WORDS = 50;
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // TEMP: testing — balance + required-field gates disabled. Fill defaults so DB NOT NULL holds.
-    const safeTitle = title.trim() || "(untitled)";
-    const safeDescription = description.trim() || "(no description)";
+    const safeTitle = title.trim();
+    const safeDescription = description.trim();
+
+    // Hard structural gates
+    if (safeTitle.length < 5) {
+      toast({ title: "Title too short", description: "At least 5 characters.", variant: "destructive" });
+      return;
+    }
+    if (!category) {
+      toast({ title: "Category required", description: "Select a category.", variant: "destructive" });
+      return;
+    }
+    if (wordCount < MIN_WORDS) {
+      toast({
+        title: "Description too short",
+        description: `Proposals must be at least ${MIN_WORDS} words. You have ${wordCount}.`,
+        variant: "destructive",
+      });
+      return;
+    }
 
     setIsSubmitting(true);
     console.log("[PROPOSAL_SUBMIT] FLOW_START: Sovereign initiated proposal submission.");
+
+    // ── Pre-flight AI validation — MUST pass before wallet prompt or chain anchor ──
+    if (!TEMP_DISABLE_AI_VALIDATION) {
+      try {
+        console.log("[PROPOSAL_SUBMIT] PREFLIGHT_VALIDATION: invoking validate-proposal");
+        const { data: verdict, error: vErr } = await supabase.functions.invoke("validate-proposal", {
+          body: { title: safeTitle, description: safeDescription, category },
+        });
+        if (vErr) throw new Error(vErr.message || "Validator unreachable");
+        if (!verdict) throw new Error("Validator returned no verdict");
+
+        console.log("[PROPOSAL_SUBMIT] PREFLIGHT_VERDICT", verdict);
+
+        if (verdict.status === "rejected") {
+          const legalNote = verdict.legal_risk === "high" && verdict.legal_reasons?.length
+            ? ` Concerns: ${verdict.legal_reasons.slice(0, 3).join("; ")}.`
+            : "";
+          toast({
+            title: "Proposal rejected by validator",
+            description: `${verdict.feedback}${legalNote}`,
+            variant: "destructive",
+          });
+          setIsSubmitting(false);
+          return;
+        }
+
+        if (verdict.status === "under_review") {
+          const legalNote = verdict.legal_risk === "medium" && verdict.legal_reasons?.length
+            ? `\n\nLegal concerns: ${verdict.legal_reasons.slice(0, 3).join("; ")}.`
+            : "";
+          const proceed = window.confirm(
+            `Validator flagged this proposal for review:\n\n${verdict.feedback}${legalNote}\n\nProceed anyway? It will still anchor on-chain.`,
+          );
+          if (!proceed) {
+            setIsSubmitting(false);
+            return;
+          }
+        }
+      } catch (vErr: any) {
+        console.error("[PROPOSAL_SUBMIT] PREFLIGHT_FAIL", vErr);
+        toast({
+          title: "Validator error",
+          description: vErr?.message || "Could not validate proposal. Try again.",
+          variant: "destructive",
+        });
+        setIsSubmitting(false);
+        return;
+      }
+    }
 
     // ── On-chain mandate: wallet must be connected before anything else ──
     const signer = walletService.getConnectedSigner();
@@ -86,28 +155,17 @@ export const CreateDaoProposalModal: React.FC<Props> = ({
       if (!user) throw new Error("Authentication required.");
       console.log("[PROPOSAL_SUBMIT] AUTH_SUCCESS: User resolved.");
 
-      // Pre-mint the DB UUID so the on-chain description carries a deterministic
-      // salt (System Ref). This guarantees a unique descriptionHash on every
-      // submit — even when title+description are byte-identical to a prior
-      // proposal — and gives us a 1:1 lineage between the on-chain proposal
-      // and the dao_proposals row.
       const proposalUuid =
         (typeof crypto !== "undefined" && "randomUUID" in crypto)
           ? crypto.randomUUID()
           : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
       const saltedDescription = `# ${safeTitle}\n\n${safeDescription}\n\n---\n*System Ref: ${proposalUuid}*`;
 
-      // ─── ON-CHAIN EXECUTION BLOCK (MANDATORY) ──────────────────────────
       console.log("[PROPOSAL_SUBMIT] CHAIN_START: Requesting wallet signature (uuid=" + proposalUuid + ")…");
 
       let chainResult: { hash: string; proposalId?: string };
       try {
-        console.log("[PROPOSAL_SUBMIT][MODAL_DISPATCH][START] Forwarding sanitized payload to governance service.");
         chainResult = await governanceService.propose(saltedDescription);
-        console.log("[PROPOSAL_SUBMIT][MODAL_DISPATCH][SUCCESS] Governance service returned chain receipt.", {
-          hash: chainResult.hash,
-          proposalId: chainResult.proposalId,
-        });
       } catch (chainErr: any) {
         console.error("[PROPOSAL_SUBMIT][MODAL_DISPATCH][FATAL_FAIL]", chainErr?.message ?? chainErr);
         const code = chainErr?.code;
@@ -121,20 +179,14 @@ export const CreateDaoProposalModal: React.FC<Props> = ({
         } else if (/GovernorUnexpectedProposalState|already exists|duplicate/i.test(friendly)) {
           friendly = "An identical proposal is already on-chain. Refresh and try again.";
         }
-        toast({
-          title: "Proposal rejected — chain anchor failed",
-          description: friendly,
-          variant: "destructive",
-        });
+        toast({ title: "Proposal rejected — chain anchor failed", description: friendly, variant: "destructive" });
         setIsSubmitting(false);
         return;
       }
 
-
       const txHash = chainResult.hash;
       const onChainProposalId = chainResult.proposalId || "";
 
-      // Hard gate: both txHash AND on-chain id required, otherwise no DB write.
       if (!txHash || !onChainProposalId) {
         console.error("[PROPOSAL_SUBMIT] CHAIN_MISSING_ID:", { txHash, onChainProposalId });
         toast({
@@ -149,19 +201,16 @@ export const CreateDaoProposalModal: React.FC<Props> = ({
 
       let onChainBlock = null;
       try {
-        console.log("[PROPOSAL_SUBMIT] RECEIPT_START: Awaiting block confirmation...");
         const provider = signer.provider;
         if (provider) {
           const receipt = await provider.getTransactionReceipt(txHash);
           onChainBlock = receipt?.blockNumber || null;
         }
-        console.log(`[PROPOSAL_SUBMIT] RECEIPT_SUCCESS: Confirmed in block ${onChainBlock}`);
       } catch (receiptErr) {
-        console.warn("[PROPOSAL_SUBMIT] RECEIPT_WARN: Block fetch stalled, proceeding.", receiptErr);
+        console.warn("[PROPOSAL_SUBMIT] RECEIPT_WARN:", receiptErr);
       }
-      // ───────────────────────────────────────────────────────────────────────
 
-      console.log("[PROPOSAL_SUBMIT] DB_INSERT_START: Committing active proposal...");
+      console.log("[PROPOSAL_SUBMIT] DB_INSERT_START");
       const { data: inserted, error: insertError } = await (supabase as any)
         .from("dao_proposals")
         .insert({
@@ -180,29 +229,10 @@ export const CreateDaoProposalModal: React.FC<Props> = ({
         .select()
         .single();
       if (insertError) {
-        console.error("[PROPOSAL_SUBMIT] DB_INSERT_FAIL: Supabase rejection.", insertError);
+        console.error("[PROPOSAL_SUBMIT] DB_INSERT_FAIL", insertError);
         throw insertError;
       }
-      console.log("[PROPOSAL_SUBMIT] DB_INSERT_SUCCESS: Row committed safely.", inserted?.id);
-
-      if (TEMP_DISABLE_AI_VALIDATION) {
-        console.log("[PROPOSAL_SUBMIT] VALIDATION_SKIPPED: Testing mode bypass active.");
-      } else if (inserted?.id) {
-        try {
-          console.log("[PROPOSAL_SUBMIT] VALIDATION_INVOKE: calling validate-proposal");
-          const { error: vErr } = await supabase.functions.invoke("validate-proposal", {
-            body: {
-              proposalId: inserted.id,
-              title: safeTitle,
-              description: safeDescription,
-              category: "governance",
-            },
-          });
-          if (vErr) console.warn("[PROPOSAL_SUBMIT] VALIDATION_WARN", vErr.message);
-        } catch (vErr: any) {
-          console.warn("[PROPOSAL_SUBMIT] VALIDATION_WARN_CATCH", vErr?.message);
-        }
-      }
+      console.log("[PROPOSAL_SUBMIT] DB_INSERT_SUCCESS", inserted?.id);
 
       toast({
         title: "Proposal live on-chain!",
@@ -225,8 +255,9 @@ export const CreateDaoProposalModal: React.FC<Props> = ({
     }
   };
 
-  // TEMP: testing — only block while submitting
-  const submitDisabled = isSubmitting;
+  const meetsRequirements =
+    title.trim().length >= 5 && !!category && wordCount >= MIN_WORDS;
+  const submitDisabled = isSubmitting || !meetsRequirements;
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && !isSubmitting && onClose()}>
@@ -309,8 +340,14 @@ export const CreateDaoProposalModal: React.FC<Props> = ({
               disabled={isSubmitting}
               className="bg-muted/40 border-input text-foreground placeholder:text-muted-foreground resize-none"
             />
-            <p className="text-[10px] text-muted-foreground text-right">
-              {description.length}/1000
+            <div className="flex justify-between text-[10px] pt-0.5">
+              <span className={wordCount >= MIN_WORDS ? "text-emerald-600 font-semibold" : "text-muted-foreground"}>
+                {wordCount} / {MIN_WORDS} words min {wordCount >= MIN_WORDS ? "✓" : ""}
+              </span>
+              <span className="text-muted-foreground">{description.length}/1000</span>
+            </div>
+            <p className="text-[10px] text-muted-foreground pt-1 leading-relaxed">
+              Proposals are AI-screened for structural clarity and legal risk before anchoring on-chain.
             </p>
           </div>
 
