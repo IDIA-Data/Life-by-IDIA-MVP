@@ -1292,6 +1292,39 @@ export type Database = {
         }
         Relationships: []
       }
+      consent_registry: {
+        Row: {
+          aca_hash_key: string | null
+          consent_type: string
+          created_at: string
+          decision: string
+          document_version: string
+          id: string
+          payload: Json
+          user_id: string
+        }
+        Insert: {
+          aca_hash_key?: string | null
+          consent_type: string
+          created_at?: string
+          decision: string
+          document_version: string
+          id?: string
+          payload?: Json
+          user_id: string
+        }
+        Update: {
+          aca_hash_key?: string | null
+          consent_type?: string
+          created_at?: string
+          decision?: string
+          document_version?: string
+          id?: string
+          payload?: Json
+          user_id?: string
+        }
+        Relationships: []
+      }
       creator_profiles: {
         Row: {
           created_at: string | null
@@ -1556,6 +1589,45 @@ export type Database = {
           status?: string
           total_items?: number | null
           updated_at?: string | null
+        }
+        Relationships: []
+      }
+      daily_prep_list: {
+        Row: {
+          business_id: string
+          created_at: string
+          id: string
+          item_name: string
+          location: string
+          on_hand: number
+          par_level: number
+          station: string
+          unit: string
+          updated_at: string
+        }
+        Insert: {
+          business_id: string
+          created_at?: string
+          id?: string
+          item_name: string
+          location: string
+          on_hand?: number
+          par_level?: number
+          station?: string
+          unit?: string
+          updated_at?: string
+        }
+        Update: {
+          business_id?: string
+          created_at?: string
+          id?: string
+          item_name?: string
+          location?: string
+          on_hand?: number
+          par_level?: number
+          station?: string
+          unit?: string
+          updated_at?: string
         }
         Relationships: []
       }
@@ -2318,6 +2390,8 @@ export type Database = {
       }
       device_provisioning_blueprints: {
         Row: {
+          assigned_at: string | null
+          assigned_employee_id: string | null
           business_id: string
           code: string
           created_at: string
@@ -2328,6 +2402,8 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          assigned_at?: string | null
+          assigned_employee_id?: string | null
           business_id: string
           code: string
           created_at?: string
@@ -2338,6 +2414,8 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          assigned_at?: string | null
+          assigned_employee_id?: string | null
           business_id?: string
           code?: string
           created_at?: string
@@ -2348,6 +2426,20 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "device_provisioning_blueprints_assigned_employee_id_fkey"
+            columns: ["assigned_employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "device_provisioning_blueprints_assigned_employee_id_fkey"
+            columns: ["assigned_employee_id"]
+            isOneToOne: false
+            referencedRelation: "team_members"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "device_provisioning_blueprints_business_id_fkey"
             columns: ["business_id"]
@@ -4679,6 +4771,186 @@ export type Database = {
           },
         ]
       }
+      kds_devices: {
+        Row: {
+          business_id: string
+          created_at: string
+          device_id: string
+          id: string
+          last_seen_at: string | null
+          role: string
+          station_ids: string[]
+          updated_at: string
+        }
+        Insert: {
+          business_id: string
+          created_at?: string
+          device_id: string
+          id?: string
+          last_seen_at?: string | null
+          role?: string
+          station_ids?: string[]
+          updated_at?: string
+        }
+        Update: {
+          business_id?: string
+          created_at?: string
+          device_id?: string
+          id?: string
+          last_seen_at?: string | null
+          role?: string
+          station_ids?: string[]
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      kds_stations: {
+        Row: {
+          active: boolean
+          business_id: string
+          created_at: string
+          id: string
+          is_expediter: boolean
+          name: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          business_id: string
+          created_at?: string
+          id?: string
+          is_expediter?: boolean
+          name: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          business_id?: string
+          created_at?: string
+          id?: string
+          is_expediter?: boolean
+          name?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      kds_ticket_items: {
+        Row: {
+          business_id: string
+          course: number
+          created_at: string
+          fulfilled_at: string | null
+          id: string
+          menu_item_id: string | null
+          modifiers: Json
+          name: string
+          quantity: number
+          sort_order: number
+          station_id: string | null
+          status: string
+          ticket_id: string
+          updated_at: string
+        }
+        Insert: {
+          business_id: string
+          course?: number
+          created_at?: string
+          fulfilled_at?: string | null
+          id?: string
+          menu_item_id?: string | null
+          modifiers?: Json
+          name: string
+          quantity?: number
+          sort_order?: number
+          station_id?: string | null
+          status?: string
+          ticket_id: string
+          updated_at?: string
+        }
+        Update: {
+          business_id?: string
+          course?: number
+          created_at?: string
+          fulfilled_at?: string | null
+          id?: string
+          menu_item_id?: string | null
+          modifiers?: Json
+          name?: string
+          quantity?: number
+          sort_order?: number
+          station_id?: string | null
+          status?: string
+          ticket_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "kds_ticket_items_station_id_fkey"
+            columns: ["station_id"]
+            isOneToOne: false
+            referencedRelation: "kds_stations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "kds_ticket_items_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: false
+            referencedRelation: "kds_tickets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      kds_tickets: {
+        Row: {
+          business_id: string
+          created_at: string
+          fired_at: string
+          fulfilled_at: string | null
+          id: string
+          order_type: string | null
+          recalled_at: string | null
+          server_name: string | null
+          source: string
+          status: string
+          table_label: string | null
+          ticket_number: string
+          updated_at: string
+        }
+        Insert: {
+          business_id: string
+          created_at?: string
+          fired_at?: string
+          fulfilled_at?: string | null
+          id?: string
+          order_type?: string | null
+          recalled_at?: string | null
+          server_name?: string | null
+          source?: string
+          status?: string
+          table_label?: string | null
+          ticket_number: string
+          updated_at?: string
+        }
+        Update: {
+          business_id?: string
+          created_at?: string
+          fired_at?: string
+          fulfilled_at?: string | null
+          id?: string
+          order_type?: string | null
+          recalled_at?: string | null
+          server_name?: string | null
+          source?: string
+          status?: string
+          table_label?: string | null
+          ticket_number?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       legal_agreements: {
         Row: {
           agreed_at: string | null
@@ -5209,6 +5481,41 @@ export type Database = {
           note?: string | null
         }
         Relationships: []
+      }
+      menu_item_station_routes: {
+        Row: {
+          business_id: string
+          created_at: string
+          id: string
+          menu_item_id: string | null
+          menu_item_name: string | null
+          station_id: string
+        }
+        Insert: {
+          business_id: string
+          created_at?: string
+          id?: string
+          menu_item_id?: string | null
+          menu_item_name?: string | null
+          station_id: string
+        }
+        Update: {
+          business_id?: string
+          created_at?: string
+          id?: string
+          menu_item_id?: string | null
+          menu_item_name?: string | null
+          station_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "menu_item_station_routes_station_id_fkey"
+            columns: ["station_id"]
+            isOneToOne: false
+            referencedRelation: "kds_stations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       menu_items: {
         Row: {
@@ -8170,28 +8477,109 @@ export type Database = {
           },
         ]
       }
+      taxonomy_nano_bites: {
+        Row: {
+          automatable: boolean
+          cadence: string | null
+          created_at: string
+          id: string
+          industry_id: string
+          is_active: boolean
+          meta: Json | null
+          micro_element: string
+          requires_tier: string | null
+          sort_order: number | null
+          task: string
+          updated_at: string
+          value_chain_stage: string
+        }
+        Insert: {
+          automatable?: boolean
+          cadence?: string | null
+          created_at?: string
+          id: string
+          industry_id: string
+          is_active?: boolean
+          meta?: Json | null
+          micro_element: string
+          requires_tier?: string | null
+          sort_order?: number | null
+          task: string
+          updated_at?: string
+          value_chain_stage: string
+        }
+        Update: {
+          automatable?: boolean
+          cadence?: string | null
+          created_at?: string
+          id?: string
+          industry_id?: string
+          is_active?: boolean
+          meta?: Json | null
+          micro_element?: string
+          requires_tier?: string | null
+          sort_order?: number | null
+          task?: string
+          updated_at?: string
+          value_chain_stage?: string
+        }
+        Relationships: []
+      }
       taxonomy_submodules: {
         Row: {
           created_at: string
+          default_archetype: string | null
+          default_production_method: string | null
           description: string | null
+          gics: string | null
           id: string
+          is_active: boolean | null
+          label: string | null
+          meta: Json | null
+          naics: string | null
           name: string
+          parent_id: string | null
+          sector: string | null
+          sort_order: number | null
+          tags: string[] | null
           updated_at: string
           vertical_id: string
         }
         Insert: {
           created_at?: string
+          default_archetype?: string | null
+          default_production_method?: string | null
           description?: string | null
+          gics?: string | null
           id: string
+          is_active?: boolean | null
+          label?: string | null
+          meta?: Json | null
+          naics?: string | null
           name: string
+          parent_id?: string | null
+          sector?: string | null
+          sort_order?: number | null
+          tags?: string[] | null
           updated_at?: string
           vertical_id: string
         }
         Update: {
           created_at?: string
+          default_archetype?: string | null
+          default_production_method?: string | null
           description?: string | null
+          gics?: string | null
           id?: string
+          is_active?: boolean | null
+          label?: string | null
+          meta?: Json | null
+          naics?: string | null
           name?: string
+          parent_id?: string | null
+          sector?: string | null
+          sort_order?: number | null
+          tags?: string[] | null
           updated_at?: string
           vertical_id?: string
         }
@@ -8209,25 +8597,49 @@ export type Database = {
         Row: {
           color: string | null
           created_at: string
+          gics: string | null
           icon: string | null
           id: string
+          is_active: boolean | null
+          label: string | null
+          meta: Json | null
+          naics: string | null
           name: string
+          sector: string | null
+          sort_order: number | null
+          tags: string[] | null
           updated_at: string
         }
         Insert: {
           color?: string | null
           created_at?: string
+          gics?: string | null
           icon?: string | null
           id: string
+          is_active?: boolean | null
+          label?: string | null
+          meta?: Json | null
+          naics?: string | null
           name: string
+          sector?: string | null
+          sort_order?: number | null
+          tags?: string[] | null
           updated_at?: string
         }
         Update: {
           color?: string | null
           created_at?: string
+          gics?: string | null
           icon?: string | null
           id?: string
+          is_active?: boolean | null
+          label?: string | null
+          meta?: Json | null
+          naics?: string | null
           name?: string
+          sector?: string | null
+          sort_order?: number | null
+          tags?: string[] | null
           updated_at?: string
         }
         Relationships: []
@@ -10778,6 +11190,27 @@ export type Database = {
         }
         Returns: number
       }
+      assign_provisioning_code: {
+        Args: { _code: string; _employee_id: string }
+        Returns: {
+          assigned_at: string | null
+          assigned_employee_id: string | null
+          business_id: string
+          code: string
+          created_at: string
+          id: string
+          label: string
+          payload: Json
+          status: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "device_provisioning_blueprints"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       auto_promote_pending_veto: { Args: never; Returns: number }
       calculate_business_health_index: {
         Args: { p_business_id: string; p_location_id?: string }
@@ -11191,6 +11624,27 @@ export type Database = {
         Returns: {
           request_id: number
         }[]
+      }
+      unassign_provisioning_code: {
+        Args: { _code: string }
+        Returns: {
+          assigned_at: string | null
+          assigned_employee_id: string | null
+          business_id: string
+          code: string
+          created_at: string
+          id: string
+          label: string
+          payload: Json
+          status: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "device_provisioning_blueprints"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       update_raw_health_data_status: {
         Args: {

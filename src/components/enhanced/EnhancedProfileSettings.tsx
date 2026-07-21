@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -238,7 +237,7 @@ const EnhancedProfileSettings: React.FC = () => {
               <p className="text-base font-semibold">${(balance.cash_balance || 0).toFixed(2)}</p>
             </div>
             <div className="text-center p-2 bg-muted rounded-md">
-              <p className="text-[11px] uppercase tracking-wide text-muted-foreground">IDIA-USD</p>
+              <p className="text-[11px] uppercase tracking-wide text-muted-foreground">USDC</p>
               <p className="text-base font-semibold">${(balance.usdc_balance || 0).toFixed(2)}</p>
             </div>
             <div className="text-center p-2 bg-muted rounded-md">

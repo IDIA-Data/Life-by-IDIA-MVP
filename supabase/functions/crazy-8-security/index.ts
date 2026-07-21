@@ -2,7 +2,8 @@ import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
-const geminiApiKey = Deno.env.get('GEMINI_API_KEY');
+const openaiApiKey = Deno.env.get('OPENAI_API_KEY');
+const OPENAI_MODEL = Deno.env.get('CRAZY8_OPENAI_MODEL') || 'gpt-4o-mini';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -55,11 +56,12 @@ const SECURITY_AGENTS = {
 
 serve(async (req) => {
   // Force redeploy v2 - testing direct function access
-  console.log('=== CRAZY 8 SECURITY FUNCTION ACTIVATED - v2.1 ===');
+  console.log('=== CRAZY 8 SECURITY FUNCTION ACTIVATED - v3.0 (openai) ===');
   console.log('Function startup at:', new Date().toISOString());
   console.log('Request URL:', req.url);
   console.log('Request method:', req.method);
-  console.log('GEMINI_API_KEY configured:', !!geminiApiKey);
+  console.log('OPENAI_API_KEY configured:', !!openaiApiKey);
+  console.log('OPENAI model:', OPENAI_MODEL);
   console.log('Environment check - SUPABASE_URL:', !!Deno.env.get('SUPABASE_URL'));
   console.log('Environment check - SERVICE_KEY:', !!Deno.env.get('SUPABASE_SERVICE_ROLE_KEY'));
   
@@ -111,9 +113,9 @@ serve(async (req) => {
     
     console.log('Crazy 8 Security: Request received', { agent, action });
 
-    if (!geminiApiKey) {
-      console.error('Crazy 8 Security: GEMINI_API_KEY not configured');
-      throw new Error('Gemini API key not configured');
+    if (!openaiApiKey) {
+      console.error('Crazy 8 Security: OPENAI_API_KEY not configured');
+      throw new Error('OpenAI API key not configured');
     }
 
     if (!(SECURITY_AGENTS as Record<string, any>)[agent]) {
@@ -214,7 +216,7 @@ Provide anomaly analysis in this JSON format:
   "patterns_observed": ["pattern1", "pattern2"]
 }`;
 
-  return await callGeminiAPI(prompt);
+  return await callOpenAI(prompt);
 }
 
 async function runPredictiveAnalytics(action: any, data: any, context: any) {
@@ -237,7 +239,7 @@ Provide predictive analysis in this JSON format:
 }`;
 
   console.log("Predictive Analytics Prompt:", prompt);
-  return await callGeminiAPI(prompt);
+  return await callOpenAI(prompt);
 }
 
 async function runThreatHunting(action: any, data: any, context: any) {
@@ -259,7 +261,7 @@ Provide threat hunting results in this JSON format:
   "containment_recommendations": ["action1", "action2"]
 }`;
 
-  return await callGeminiAPI(prompt);
+  return await callOpenAI(prompt);
 }
 
 async function runSecurityOrchestration(action: any, data: any, context: any) {
@@ -282,7 +284,7 @@ Provide orchestration plan in this JSON format:
   "resource_requirements": ["resource1", "resource2"]
 }`;
 
-  return await callGeminiAPI(prompt);
+  return await callOpenAI(prompt);
 }
 
 async function runAccessManagement(action: any, data: any, context: any) {
@@ -304,7 +306,7 @@ Provide access analysis in this JSON format:
   "compliance_status": "compliant|violation|review_required"
 }`;
 
-  return await callGeminiAPI(prompt);
+  return await callOpenAI(prompt);
 }
 
 async function runDataProtection(action: any, data: any, context: any) {
@@ -326,7 +328,7 @@ Provide DLP analysis in this JSON format:
   "compliance_impact": "none|minor|major|critical"
 }`;
 
-  return await callGeminiAPI(prompt);
+  return await callOpenAI(prompt);
 }
 
 async function runAdversarialDefense(action: any, data: any, context: any) {
@@ -348,7 +350,7 @@ Provide adversarial analysis in this JSON format:
   "model_integrity": "intact|compromised|uncertain"
 }`;
 
-  return await callGeminiAPI(prompt);
+  return await callOpenAI(prompt);
 }
 
 async function runExplainableAnalysis(action: any, data: any, context: any) {
@@ -370,48 +372,52 @@ Provide explainable analysis in this JSON format:
   "next_steps": "Clear guidance on what happens next"
 }`;
 
-  return await callGeminiAPI(prompt);
+  return await callOpenAI(prompt);
 }
 
-async function callGeminiAPI(prompt: any) {
+async function callOpenAI(prompt: any) {
   const bodyPayload = {
-    contents: [{
-      parts: [{
-        text: prompt
-      }]
-    }],
-    generationConfig: {
-      temperature: 0.1,
-      topK: 40,
-      topP: 0.95,
-      maxOutputTokens: 2048
-    }
+    model: OPENAI_MODEL,
+    messages: [
+      {
+        role: 'system',
+        content:
+          'You are a security analysis agent. Respond ONLY with strict, valid JSON matching the schema described in the user prompt. Do not include prose, markdown, or code fences.',
+      },
+      { role: 'user', content: String(prompt) },
+    ],
+    response_format: { type: 'json_object' },
+    temperature: 0.1,
+    max_tokens: 2048,
   };
 
-  console.log("Gemini API Request Payload:", JSON.stringify(bodyPayload, null, 2));
+  console.log('OpenAI Request:', JSON.stringify({ model: OPENAI_MODEL, promptLen: String(prompt).length }));
 
-  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key=${geminiApiKey}`, {
+  const response = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     headers: {
-      'Content-Type': 'application/json'
+      'Authorization': `Bearer ${openaiApiKey}`,
+      'Content-Type': 'application/json',
     },
-    body: JSON.stringify(bodyPayload)
+    body: JSON.stringify(bodyPayload),
   });
 
   if (!response.ok) {
-    throw new Error(`Gemini API error: ${response.status}`);
+    const errText = await response.text().catch(() => '');
+    console.error(`OpenAI API error ${response.status}:`, errText);
+    throw new Error(`OpenAI API error: ${response.status}`);
   }
 
   const data = await response.json();
-  const responseText = data.candidates[0].content.parts[0].text;
+  const responseText = data.choices?.[0]?.message?.content ?? '';
 
   try {
     return JSON.parse(responseText);
   } catch (parseError) {
-    console.error('Failed to parse Gemini response as JSON:', responseText);
+    console.error('Failed to parse OpenAI response as JSON:', responseText);
     return {
       error: 'Invalid JSON response',
-      raw_response: responseText
+      raw_response: responseText,
     };
   }
 }

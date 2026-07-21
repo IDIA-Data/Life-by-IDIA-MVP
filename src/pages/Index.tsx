@@ -14,7 +14,15 @@ const Index = () => {
   useEffect(() => {
     const checkAuth = async () => {
       const { data: { session } } = await supabase.auth.getSession();
-      setIsAuthenticated(!!session?.user);
+      const user = session?.user;
+      setIsAuthenticated(!!user);
+      // AoR gate: if user accepted ToS but hasn't decided AoR, route them there.
+      if (user) {
+        const meta: any = user.user_metadata || {};
+        if (meta.tos_accepted_at && !meta.aor_decision) {
+          navigate('/authority-of-record', { replace: true });
+        }
+      }
     };
 
     checkAuth();

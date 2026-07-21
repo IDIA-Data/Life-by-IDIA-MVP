@@ -42,6 +42,11 @@ const GLOBAL_WAR_CHEST = "0x0910EF34C9F59A90d90FF505B1036DEed4a25d59";
 // USDC on Base Mainnet
 const USDC_ADDRESS = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
 
+// IDIA token on Base Mainnet — direct ERC-20 transferFrom target
+// (bypasses phantom Escrow.automatedDistribute; relayer holds allowance
+// from ESCROW_ECOSYSTEM already).
+const IDIA_TOKEN_ADDRESS = "0x6526F939D257E67896821c25B6C24Daa404a01FB";
+
 // System wallets
 const SYSTEM_CASH_REGISTER = "0x649436db4d9352240d1132d9372293e5cc6af0e3";
 
@@ -55,6 +60,17 @@ const ERC20_ABI = [
     type: "function",
     stateMutability: "nonpayable",
     inputs: [
+      { name: "to", type: "address" },
+      { name: "value", type: "uint256" },
+    ],
+    outputs: [{ name: "", type: "bool" }],
+  },
+  {
+    name: "transferFrom",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "from", type: "address" },
       { name: "to", type: "address" },
       { name: "value", type: "uint256" },
     ],
@@ -92,6 +108,17 @@ const POOL_FACTORY_ABI = [
 const ESCROW_ABI = [
   {
     name: "proposeDistribution",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "recipient", type: "address" },
+      { name: "amount", type: "uint256" },
+      { name: "reason", type: "string" },
+    ],
+    outputs: [{ name: "proposalId", type: "uint256" }],
+  },
+  {
+    name: "automatedDistribute",
     type: "function",
     stateMutability: "nonpayable",
     inputs: [
@@ -502,7 +529,8 @@ async function executeSettlement(payoutData: any, runCorrelationId: string): Pro
       const totalRoyaltyPool = total_fiat_amount * REVENUE_SPLIT.DATA_YIELD;
       const perContributorYield = totalRoyaltyPool / contributing_users.length;
       const contributorPayouts = [];
-      const idiaAwardAmount = parseUnits("1", 18);
+      // 1:1 IDIA award mirrors each contributor's USDC yield (18-decimal IDIA vs 6-decimal USDC).
+      const idiaAwardAmount = parseUnits(perContributorYield.toFixed(6), 18);
 
       console.info("[BEGIN: Phase_3_Contributor.BatchExecution] Initializing sequential transaction pipeline.");
       try {
@@ -563,6 +591,12 @@ async function executeSettlement(payoutData: any, runCorrelationId: string): Pro
             `[BEGIN: Batch.Item] Processing transfer ${i + 1}/${contributing_users.length} to ${lifeWallet}`,
           );
 
+          // Per-phase progress flags — used by the catch block to route the
+          // single failed-row ledger insert to the correct phase and prevent
+          // an IDIA revert from being logged as a duplicate USDC payout.
+          let yieldSettled = false;
+          let idiaSettled = false;
+
           try {
             // 1. Yield transfer (USDC) — nonce-safe with retry
             const { hash: yieldHash, receipt: yieldReceipt } = await sendWithNonceRetry(
@@ -584,31 +618,9 @@ async function executeSettlement(payoutData: any, runCorrelationId: string): Pro
               console.error(`[ERROR: Batch.Item] Yield transaction reverted on-chain. Hash: ${yieldHash}`);
             }
 
-            // 2. Royalty proposal (escrow) — nonce-safe with retry
-            const { hash: proposalHash, receipt: proposalReceipt } = await sendWithNonceRetry(
-              (nonce) =>
-                client.writeContract({
-                  address: ESCROW_ECOSYSTEM,
-                  abi: ESCROW_ABI,
-                  functionName: "proposeDistribution",
-                  args: [
-                    lifeWallet as `0x${string}`,
-                    idiaAwardAmount,
-                    `Automated royalty yield proposal: Ref ${ingestionReference}`,
-                  ],
-                  account,
-                  nonce,
-                }),
-              "proposal",
-            );
-            console.info(`[STATUS: Batch.Item] Proposal TX Broadcasted. Hash: ${proposalHash}. Confirmed.`);
-            if (proposalReceipt.status === "success") {
-              console.info(`[END: Batch.Item] Proposal successful. Block: ${proposalReceipt.blockNumber}`);
-            } else {
-              console.error(`[ERROR: Batch.Item] Proposal reverted on-chain. Hash: ${proposalHash}`);
-            }
-
-            // 3. Ledger insert
+            // Ledger insert for the USDC yield row FIRST — once it lands (or
+            // is queued for repair), we mark yieldSettled so a subsequent
+            // IDIA failure cannot cause a duplicate data_sale_payout row.
             const yieldStatus = yieldReceipt.status === "success" ? "completed" : "failed";
             await insertLedgerWithRepair(supabase, {
               reference_id: ingestionReference,
@@ -622,16 +634,61 @@ async function executeSettlement(payoutData: any, runCorrelationId: string): Pro
                 transaction_type: "data_sale_payout",
                 status: yieldStatus,
                 blockchain_tx_hash: yieldHash,
-                is_settled: true,
+                is_settled: yieldStatus === "completed",
                 settled_at: new Date().toISOString(),
-                description: `Pro-rata yield for Ref: ${ingestionReference}`,
+                description: `Pro-rata USDC yield for Ref: ${ingestionReference}`,
               },
             });
+            yieldSettled = true;
+
+            // 2. IDIA royalty award — direct ERC-20 transferFrom on IDIA token.
+            //    Bypasses Escrow.automatedDistribute (phantom state-update that
+            //    did not move tokens). Relayer already holds allowance from
+            //    ESCROW_ECOSYSTEM, so pull tokens: FROM escrow → TO contributor.
+            const { hash: idiaHash, receipt: idiaReceipt } = await sendWithNonceRetry(
+              (nonce) =>
+                client.writeContract({
+                  address: IDIA_TOKEN_ADDRESS,
+                  abi: ERC20_ABI,
+                  functionName: "transferFrom",
+                  args: [ESCROW_ECOSYSTEM as `0x${string}`, lifeWallet as `0x${string}`, idiaAwardAmount],
+                  account,
+                  nonce,
+                }),
+              "idia_award",
+            );
+            console.info(`[STATUS: Batch.Item] IDIA transferFrom Broadcasted. Hash: ${idiaHash}.`);
+            if (idiaReceipt.status === "success") {
+              console.info(`[END: Batch.Item] IDIA transferFrom successful. Block: ${idiaReceipt.blockNumber}`);
+            } else {
+              console.error(`[ERROR: Batch.Item] IDIA transferFrom reverted. Hash: ${idiaHash}`);
+            }
+
+            // 3. Ledger insert — IDIA royalty yield row (enum: idia_royalty_yield).
+            const idiaStatus = idiaReceipt.status === "success" ? "completed" : "failed";
+            await insertLedgerWithRepair(supabase, {
+              reference_id: ingestionReference,
+              user_id: contributor.user_id,
+              phase: "idia_royalty_yield",
+              blockchain_tx_hash: idiaHash,
+              row: {
+                user_id: contributor.user_id,
+                amount: perContributorYield,
+                entry_type: "deposit",
+                transaction_type: "idia_royalty_yield",
+                status: idiaStatus,
+                blockchain_tx_hash: idiaHash,
+                is_settled: idiaStatus === "completed",
+                settled_at: new Date().toISOString(),
+                description: `1:1 IDIA royalty yield for Ref: ${ingestionReference}`,
+              },
+            });
+            idiaSettled = true;
 
             contributorPayouts.push({
               wallet: lifeWallet,
               yield_hash: yieldHash,
-              proposal_hash: proposalHash,
+              idia_hash: idiaHash,
             });
 
             // 4. RPC rate-limit buffer
@@ -639,32 +696,49 @@ async function executeSettlement(payoutData: any, runCorrelationId: string): Pro
           } catch (txError: any) {
             console.info(`[BEGIN: Batch.Item.Error]`);
             console.error(`[FATAL STALL: Batch.Item] Failed executing transfer for ${lifeWallet}: ${txError.message}`);
+            // Phase-accurate failure routing. Exactly ONE failed row is
+            // emitted, mapped to the phase that actually failed:
+            //   - yield not yet settled  → data_sale_payout failed row
+            //   - yield settled, IDIA not → idia_royalty_yield failed row
+            //   - both settled            → no extra row (bookkeeping post-phase)
+            // This eliminates the double-payout bleed where an IDIA revert
+            // was previously logged as a second data_sale_payout row.
+            const failedPhase = !yieldSettled
+              ? { phase: "contributor_yield", transaction_type: "data_sale_payout", label: "pro-rata USDC yield" }
+              : !idiaSettled
+                ? {
+                    phase: "idia_royalty_yield",
+                    transaction_type: "idia_royalty_yield",
+                    label: "1:1 IDIA royalty yield",
+                  }
+                : null;
             skippedContributors.push({
               user_id: contributor.user_id,
-              reason: `tx_error: ${txError?.message ?? "unknown"}`,
+              reason: `tx_error[${failedPhase?.phase ?? "post_settlement"}]: ${txError?.message ?? "unknown"}`,
             });
-            // Route failure through repair queue so reconciliation can pick it up.
-            try {
-              await insertLedgerWithRepair(supabase, {
-                reference_id: ingestionReference,
-                user_id: contributor.user_id,
-                phase: "contributor_yield",
-                blockchain_tx_hash: null,
-                row: {
+            if (failedPhase) {
+              try {
+                await insertLedgerWithRepair(supabase, {
+                  reference_id: ingestionReference,
                   user_id: contributor.user_id,
-                  amount: perContributorYield,
-                  entry_type: "deposit",
-                  transaction_type: "data_sale_payout",
-                  status: "failed",
+                  phase: failedPhase.phase,
                   blockchain_tx_hash: null,
-                  is_settled: false,
-                  description: `Failed pro-rata yield for Ref: ${ingestionReference} — ${txError?.message ?? "unknown"}`,
-                },
-              });
-            } catch (repairError: any) {
-              console.error(
-                `[ERROR: Batch.Item.Repair] repair-queue insert failed: ${repairError?.message ?? repairError}`,
-              );
+                  row: {
+                    user_id: contributor.user_id,
+                    amount: perContributorYield,
+                    entry_type: "deposit",
+                    transaction_type: failedPhase.transaction_type,
+                    status: "failed",
+                    blockchain_tx_hash: null,
+                    is_settled: false,
+                    description: `Failed ${failedPhase.label} for Ref: ${ingestionReference} — ${txError?.message ?? "unknown"}`,
+                  },
+                });
+              } catch (repairError: any) {
+                console.error(
+                  `[ERROR: Batch.Item.Repair] repair-queue insert failed: ${repairError?.message ?? repairError}`,
+                );
+              }
             }
             console.info(`[END: Batch.Item.Error]`);
             continue;
