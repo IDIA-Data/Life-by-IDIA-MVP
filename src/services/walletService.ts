@@ -18,6 +18,7 @@ export type ProvisioningStage =
   | "requesting_drip"
   | "awaiting_gas"
   | "approving_usdc"
+  | "approving_vault"
   | "delegating_self"
   | "done"
   | "failed";
@@ -25,13 +26,13 @@ export type ProvisioningStage =
 export interface ProvisionResult {
   dripTxHash: string;
   approveTxHash: string;
+  vaultApproveTxHash: string;
   delegateTxHash: string;
   relayerAddress: string;
 }
 
-// ── Network Configuration ────────────────────────────────────────────
+// -- Network Configuration ------------------------------------------------
 
-// Helper to safely load the Alchemy RPC from Vite environment
 const getBaseRpcUrl = (): string => {
   try {
     const raw = (import.meta as any).env?.VITE_ALCHEMY_RPC_URL;
@@ -44,7 +45,7 @@ const getBaseRpcUrl = (): string => {
   } catch (e) {
     console.warn("Could not read import.meta.env for RPC URL.");
   }
-  console.warn("⚠️ Using public Base node. Expect 429 Rate Limit errors!");
+  console.warn("Using public Base node. Expect 429 Rate Limit errors!");
   return "https://mainnet.base.org";
 };
 
@@ -55,7 +56,6 @@ export interface NetworkConfig {
   symbol: string;
   blockExplorer: string;
   isTestnet: boolean;
-  // Token contract addresses for THIS network — pass '' if not deployed.
   idiaToken: string;
   usdc: string;
 }
@@ -104,11 +104,11 @@ export const NETWORKS: Record<string, NetworkConfig> = {
   base: {
     name: "Base",
     chainId: 8453,
-    rpcUrl: getBaseRpcUrl(), // <--- DYNAMICALLY LOADED ALCHEMY URL
+    rpcUrl: getBaseRpcUrl(),
     symbol: "ETH",
     blockExplorer: "https://basescan.org",
     isTestnet: false,
-    idiaToken: "0x6526F939D257E67896821c25B6C24Daa404a01FB", // Mainnet IDIA
+    idiaToken: "0x6526F939D257E67896821c25B6C24Daa404a01FB",
     usdc: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
   },
   baseSepolia: {
@@ -118,14 +118,22 @@ export const NETWORKS: Record<string, NetworkConfig> = {
     symbol: "ETH",
     blockExplorer: "https://sepolia.basescan.org",
     isTestnet: true,
-    idiaToken: "0x18306e920946FA7e42990C5D6F9402750407bF4B", // Testnet IDIA
+    idiaToken: "0x18306e920946FA7e42990C5D6F9402750407bF4B",
     usdc: "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
   },
 };
 
 const DEFAULT_NETWORK = ACTIVE_DEPLOYMENT === "mainnet" ? "base" : "baseSepolia";
 
-// ── Storage Keys ─────────────────────────────────────────────────────
+// -- Synapse Vault Addresses (per network) --------------------------------
+// Users approve this contract for USDC spending during credit purchases.
+// Approving a smart contract instead of an EOA avoids MetaMask scam warnings.
+const SYNAPSE_VAULT_ADDRESSES: Record<string, string> = {
+  base: "0x7F46293d51Ca3264f060eFC92233b40A76130b4A",
+  baseSepolia: "",
+};
+
+// -- Storage Keys ---------------------------------------------------------
 
 const STORAGE_KEYS = {
   ENCRYPTED_MNEMONIC: "idia_wallet_mnemonic",
@@ -133,7 +141,7 @@ const STORAGE_KEYS = {
   WALLET_EXISTS: "idia_wallet_exists",
 } as const;
 
-// ── Types ────────────────────────────────────────────────────────────
+// -- Types ----------------------------------------------------------------
 
 export interface WalletInfo {
   address: string;
@@ -198,8 +206,6 @@ class WalletService {
   private activeNetwork: string = DEFAULT_NETWORK;
   private mnemonic: string | null = null;
 
-  // ── Wallet Lifecycle ──────────────────────────────────────────
-
   async hasWallet(): Promise<boolean> {
     try {
       const { value } = await Preferences.get({ key: STORAGE_KEYS.WALLET_EXISTS });
@@ -248,10 +254,7 @@ class WalletService {
     await Preferences.set({ key: STORAGE_KEYS.ENCRYPTED_MNEMONIC, value: trimmed });
     await Preferences.set({ key: STORAGE_KEYS.WALLET_EXISTS, value: "true" });
     await Preferences.set({ key: STORAGE_KEYS.ACTIVE_NETWORK, value: DEFAULT_NETWORK });
-
-    // FIX: persist to Secure Enclave so loadWallet() finds it on next launch
     await storeSecureKeys(trimmed);
-
     this.wallet = w;
     this.mnemonic = trimmed;
     this.activeNetwork = DEFAULT_NETWORK;
@@ -261,35 +264,27 @@ class WalletService {
   async loadWallet(): Promise<WalletInfo | null> {
     try {
       let mnemonic: string | null = null;
-
-      // Primary: Secure Enclave
       try {
         const { value } = await SecureStoragePlugin.get({ key: KEYS.MNEMONIC });
         mnemonic = value || null;
       } catch {
         mnemonic = null;
       }
-
-      // Fallback: migrate from legacy Preferences storage
       if (!mnemonic) {
         try {
           const { value: legacy } = await Preferences.get({ key: STORAGE_KEYS.ENCRYPTED_MNEMONIC });
           if (legacy) {
             mnemonic = legacy;
-            // Migrate to Secure Enclave BEFORE returning so wallet is safely stored
             await storeSecureKeys(legacy);
-            console.log("[INFO] Wallet: migrated mnemonic from Preferences → Secure Enclave");
+            console.log("[INFO] Wallet: migrated mnemonic from Preferences -> Secure Enclave");
           }
         } catch (e) {
           console.warn("[WARN] Wallet: Preferences fallback failed", e);
         }
       }
-
       if (!mnemonic) return null;
-
       this.wallet = ethers.HDNodeWallet.fromMnemonic(ethers.Mnemonic.fromPhrase(mnemonic));
       this.mnemonic = mnemonic;
-
       try {
         const { value: net } = await Preferences.get({ key: STORAGE_KEYS.ACTIVE_NETWORK });
         if (net && NETWORKS[net]) {
@@ -303,7 +298,6 @@ class WalletService {
           }
         }
       } catch {}
-
       return { address: this.wallet.address, activeNetwork: this.activeNetwork };
     } catch {
       return null;
@@ -314,22 +308,16 @@ class WalletService {
     this.wallet = null;
     this.mnemonic = null;
     this.activeNetwork = DEFAULT_NETWORK;
-    try {
-      await SecureStoragePlugin.remove({ key: KEYS.MNEMONIC });
-    } catch {}
-    try {
-      await SecureStoragePlugin.remove({ key: KEYS.EXISTS });
-    } catch {}
-    try {
-      await SecureStoragePlugin.remove({ key: KEYS.NETWORK });
-    } catch {}
+    try { await SecureStoragePlugin.remove({ key: KEYS.MNEMONIC }); } catch {}
+    try { await SecureStoragePlugin.remove({ key: KEYS.EXISTS }); } catch {}
+    try { await SecureStoragePlugin.remove({ key: KEYS.NETWORK }); } catch {}
   }
 
   getRawWallet(): ethers.HDNodeWallet | null {
     return this.wallet;
   }
 
-  // ── Network Management ────────────────────────────────────────
+  // -- Network Management -------------------------------------------------
 
   async switchNetwork(networkKey: string): Promise<void> {
     if (!NETWORKS[networkKey]) throw new Error(`Unknown network: ${networkKey}`);
@@ -348,16 +336,12 @@ class WalletService {
     return Object.entries(NETWORKS).map(([key, config]) => ({ key, config }));
   }
 
-  /**
-   * Get token addresses for the active (or specified) network.
-   * Returns empty string if a token isn't deployed on that network.
-   */
   private getTokenAddresses(networkKey?: string): { idiaToken: string; usdc: string } {
     const net = NETWORKS[networkKey || this.activeNetwork];
     return { idiaToken: net.idiaToken, usdc: net.usdc };
   }
 
-  // ── Providers and Signers ─────────────────────────────────────
+  // -- Providers and Signers ----------------------------------------------
 
   private getProvider(networkKey?: string): ethers.JsonRpcProvider {
     const network = NETWORKS[networkKey || this.activeNetwork];
@@ -370,7 +354,6 @@ class WalletService {
     return new ethers.Wallet(this.wallet.privateKey, provider);
   }
 
-  // Add this method to the WalletService class
   public getConnectedSigner(networkKey?: string): ethers.Wallet {
     console.log("[START] Wallet: getConnectedSigner");
     try {
@@ -383,7 +366,7 @@ class WalletService {
     }
   }
 
-  // ── Balance Reading ───────────────────────────────────────────
+  // -- Balance Reading ----------------------------------------------------
 
   async getNativeBalance(networkKey?: string): Promise<TokenBalance> {
     if (!this.wallet) throw new Error("No wallet loaded");
@@ -402,59 +385,32 @@ class WalletService {
   async getIDIABalance(networkKey?: string): Promise<TokenBalance> {
     if (!this.wallet) throw new Error("No wallet loaded");
     const { idiaToken } = this.getTokenAddresses(networkKey);
-
-    // If IDIA token isn't deployed on this network, return zero
     if (!idiaToken) {
-      return {
-        symbol: "IDIA",
-        name: "IDIA Token",
-        balance: "0",
-        balanceFormatted: "0.0",
-        decimals: 18,
-        contractAddress: "",
-      };
+      return { symbol: "IDIA", name: "IDIA Token", balance: "0", balanceFormatted: "0.0", decimals: 18, contractAddress: "" };
     }
-
     const provider = this.getProvider(networkKey);
     const token = new ethers.Contract(idiaToken, IDIA_TOKEN_ABI, provider);
     const balance = await token.balanceOf(this.wallet.address);
-
     return {
-      symbol: "IDIA",
-      name: "IDIA Token",
-      balance: balance.toString(),
-      balanceFormatted: ethers.formatEther(balance),
-      decimals: 18,
-      contractAddress: idiaToken,
+      symbol: "IDIA", name: "IDIA Token",
+      balance: balance.toString(), balanceFormatted: ethers.formatEther(balance),
+      decimals: 18, contractAddress: idiaToken,
     };
   }
 
   async getUSDCBalance(networkKey?: string): Promise<TokenBalance> {
     if (!this.wallet) throw new Error("No wallet loaded");
     const { usdc } = this.getTokenAddresses(networkKey);
-
     if (!usdc) {
-      return {
-        symbol: "USDC",
-        name: "USD Coin",
-        balance: "0",
-        balanceFormatted: "0.00",
-        decimals: 6,
-        contractAddress: "",
-      };
+      return { symbol: "USDC", name: "USD Coin", balance: "0", balanceFormatted: "0.00", decimals: 6, contractAddress: "" };
     }
-
     const provider = this.getProvider(networkKey);
     const usdcContract = new ethers.Contract(usdc, ERC20_ABI, provider);
     const balance = await usdcContract.balanceOf(this.wallet.address);
-
     return {
-      symbol: "USDC",
-      name: "USD Coin",
-      balance: balance.toString(),
-      balanceFormatted: ethers.formatUnits(balance, 6),
-      decimals: 6,
-      contractAddress: usdc,
+      symbol: "USDC", name: "USD Coin",
+      balance: balance.toString(), balanceFormatted: ethers.formatUnits(balance, 6),
+      decimals: 6, contractAddress: usdc,
     };
   }
 
@@ -463,51 +419,37 @@ class WalletService {
     const provider = this.getProvider(networkKey);
     const token = new ethers.Contract(tokenAddress, ERC20_ABI, provider);
     const [balance, symbol, name, decimals] = await Promise.all([
-      token.balanceOf(this.wallet.address),
-      token.symbol(),
-      token.name(),
-      token.decimals(),
+      token.balanceOf(this.wallet.address), token.symbol(), token.name(), token.decimals(),
     ]);
     return {
-      symbol,
-      name,
-      balance: balance.toString(),
-      balanceFormatted: ethers.formatUnits(balance, decimals),
-      decimals: Number(decimals),
-      contractAddress: tokenAddress,
+      symbol, name,
+      balance: balance.toString(), balanceFormatted: ethers.formatUnits(balance, decimals),
+      decimals: Number(decimals), contractAddress: tokenAddress,
     };
   }
 
   async getAllBalances(networkKey?: string): Promise<WalletBalances> {
     const [eth, idia, usdc] = await Promise.all([
-      this.getNativeBalance(networkKey),
-      this.getIDIABalance(networkKey),
-      this.getUSDCBalance(networkKey),
+      this.getNativeBalance(networkKey), this.getIDIABalance(networkKey), this.getUSDCBalance(networkKey),
     ]);
     return { eth, idia, usdc };
   }
 
-  // ── Governance Delegation ─────────────────────────────────────
+  // -- Governance Delegation ----------------------------------------------
 
   async delegateVotes(delegatee?: string): Promise<TransactionResult> {
     if (!this.wallet) throw new Error("No wallet loaded");
     const { idiaToken } = this.getTokenAddresses();
     if (!idiaToken) throw new Error("IDIA token not deployed on this network");
-
     const signer = this.getSigner();
     const token = new ethers.Contract(idiaToken, IDIA_TOKEN_ABI, signer);
     const target = delegatee || this.wallet.address;
     const tx = await token.delegate(target);
     await tx.wait();
-
     const network = this.getActiveNetwork();
     return {
-      hash: tx.hash,
-      from: this.wallet.address,
-      to: idiaToken,
-      amount: "0",
-      network: network.name,
-      blockExplorerUrl: `${network.blockExplorer}/tx/${tx.hash}`,
+      hash: tx.hash, from: this.wallet.address, to: idiaToken, amount: "0",
+      network: network.name, blockExplorerUrl: `${network.blockExplorer}/tx/${tx.hash}`,
     };
   }
 
@@ -515,7 +457,6 @@ class WalletService {
     if (!this.wallet) throw new Error("No wallet loaded");
     const { idiaToken } = this.getTokenAddresses();
     if (!idiaToken) return "0";
-
     const provider = this.getProvider();
     const token = new ethers.Contract(idiaToken, IDIA_TOKEN_ABI, provider);
     const votes = await token.getVotes(this.wallet.address);
@@ -526,13 +467,12 @@ class WalletService {
     if (!this.wallet) throw new Error("No wallet loaded");
     const { idiaToken } = this.getTokenAddresses();
     if (!idiaToken) return ethers.ZeroAddress;
-
     const provider = this.getProvider();
     const token = new ethers.Contract(idiaToken, IDIA_TOKEN_ABI, provider);
     return await token.delegates(this.wallet.address);
   }
 
-  // ── Transactions ──────────────────────────────────────────────
+  // -- Transactions -------------------------------------------------------
 
   async sendNative(to: string, amount: string): Promise<TransactionResult> {
     if (!this.wallet) throw new Error("No wallet loaded");
@@ -542,12 +482,8 @@ class WalletService {
     const tx = await signer.sendTransaction({ to, value: ethers.parseEther(amount) });
     await tx.wait();
     return {
-      hash: tx.hash,
-      from: this.wallet.address,
-      to,
-      amount,
-      network: network.name,
-      blockExplorerUrl: `${network.blockExplorer}/tx/${tx.hash}`,
+      hash: tx.hash, from: this.wallet.address, to, amount,
+      network: network.name, blockExplorerUrl: `${network.blockExplorer}/tx/${tx.hash}`,
     };
   }
 
@@ -556,19 +492,14 @@ class WalletService {
     if (!ethers.isAddress(to)) throw new Error("Invalid recipient address");
     const { idiaToken } = this.getTokenAddresses();
     if (!idiaToken) throw new Error("IDIA token not deployed on this network");
-
     const signer = this.getSigner();
     const network = this.getActiveNetwork();
     const token = new ethers.Contract(idiaToken, IDIA_TOKEN_ABI, signer);
     const tx = await token.transfer(to, ethers.parseEther(amount));
     await tx.wait();
     return {
-      hash: tx.hash,
-      from: this.wallet.address,
-      to,
-      amount: `${amount} IDIA`,
-      network: network.name,
-      blockExplorerUrl: `${network.blockExplorer}/tx/${tx.hash}`,
+      hash: tx.hash, from: this.wallet.address, to, amount: `${amount} IDIA`,
+      network: network.name, blockExplorerUrl: `${network.blockExplorer}/tx/${tx.hash}`,
     };
   }
 
@@ -583,20 +514,13 @@ class WalletService {
     const tx = await token.transfer(to, ethers.parseUnits(amount, decimals));
     await tx.wait();
     return {
-      hash: tx.hash,
-      from: this.wallet.address,
-      to,
-      amount: `${amount} ${symbol}`,
-      network: network.name,
-      blockExplorerUrl: `${network.blockExplorer}/tx/${tx.hash}`,
+      hash: tx.hash, from: this.wallet.address, to, amount: `${amount} ${symbol}`,
+      network: network.name, blockExplorerUrl: `${network.blockExplorer}/tx/${tx.hash}`,
     };
   }
 
   async estimateTransfer(req: TxRequest): Promise<{
-    gasFeeFormatted: string;
-    totalCostFormatted: string;
-    symbol: string;
-    network?: string;
+    gasFeeFormatted: string; totalCostFormatted: string; symbol: string; network?: string;
   } | null> {
     if (!this.wallet) return null;
     try {
@@ -606,17 +530,13 @@ class WalletService {
       const feeData = await provider.getFeeData();
       const gasPrice = feeData.gasPrice || 0n;
       const gasLimit = await provider.estimateGas({
-        from: this.wallet.address,
-        to: req.to,
-        value: amountWei,
-        data: req.data,
+        from: this.wallet.address, to: req.to, value: amountWei, data: req.data,
       });
       const gasFeeWei = gasPrice * gasLimit;
       return {
         gasFeeFormatted: ethers.formatEther(gasFeeWei),
         totalCostFormatted: ethers.formatEther(amountWei + gasFeeWei),
-        symbol: net.symbol,
-        network: net.name,
+        symbol: net.symbol, network: net.name,
       };
     } catch (e) {
       console.error("Estimate failed:", e);
@@ -633,12 +553,8 @@ class WalletService {
     const tx = await signer.sendTransaction({ to: req.to, value: ethers.parseEther(req.amount), data: req.data });
     await tx.wait();
     return {
-      hash: tx.hash,
-      from: this.wallet.address,
-      to: req.to,
-      amount: req.amount,
-      network: net.name,
-      blockExplorerUrl: `${net.blockExplorer}/tx/${tx.hash}`,
+      hash: tx.hash, from: this.wallet.address, to: req.to, amount: req.amount,
+      network: net.name, blockExplorerUrl: `${net.blockExplorer}/tx/${tx.hash}`,
     };
   }
 
@@ -646,12 +562,13 @@ class WalletService {
    * Drip + Sign onboarding sequence for a freshly-created wallet on Base.
    *
    * Steps:
-   * 1. Request gas drip from `wallet-gas-drip` edge function
+   * 1. Request gas drip from wallet-gas-drip edge function
    * 2. Poll Base RPC for non-zero ETH balance (2s interval, 30s max)
-   * 3. Broadcast USDC.approve(relayer, MaxUint256)
-   * 4. Broadcast IDIA.delegate(self)
+   * 3. Broadcast USDC.approve(relayer, MaxUint256) -- for gasless relay operations
+   * 4. Broadcast USDC.approve(SynapseVault, MaxUint256) -- for credit purchases (no scam warning)
+   * 5. Broadcast IDIA.delegate(self)
    *
-   * Telemetry: [WALLET_PROVISION][…]
+   * Telemetry: [WALLET_PROVISION][...]
    */
   async provisionNewWallet(onStage?: (stage: ProvisioningStage) => void): Promise<ProvisionResult> {
     const TAG = "[WALLET_PROVISION]";
@@ -675,13 +592,12 @@ class WalletService {
     console.log(`${TAG}[START] address=${address} network=${network.name} usdc=${usdc} idia=${idiaToken}`);
 
     try {
-      // ── 1. Request drip ────────────────────────────────────────
+      // -- 1. Request drip ------------------------------------------------
       setStage("requesting_drip");
       const { data: dripData, error: dripError } = await supabase.functions.invoke("wallet-gas-drip", {
         body: { target_address: address },
       });
       if (dripError) {
-        // 400 from anti-abuse guard means already funded — treat as recoverable.
         const msg = (dripError as any)?.message || String(dripError);
         console.warn(`${TAG}[DRIP_REQUEST] non-fatal error: ${msg}`);
       }
@@ -689,7 +605,7 @@ class WalletService {
       const relayerAddress: string | undefined = dripData?.relayer_address;
       console.log(`${TAG}[DRIP_REQUEST][OK] hash=${dripTxHash} relayer=${relayerAddress}`);
 
-      // ── 2. Await gas on Base ──────────────────────────────────
+      // -- 2. Await gas on Base -------------------------------------------
       setStage("awaiting_gas");
       const provider = this.getProvider();
       const POLL_INTERVAL_MS = 2000;
@@ -706,7 +622,7 @@ class WalletService {
       }
       if (!funded) throw new Error("Gas drip did not land within 30 seconds");
 
-      // ── 3. USDC.approve(relayer, MaxUint256) ──────────────────
+      // -- 3. USDC.approve(relayer) -- for gasless relay operations --------
       setStage("approving_usdc");
       if (!relayerAddress || !ethers.isAddress(relayerAddress)) {
         throw new Error("Drip response missing relayer_address");
@@ -719,7 +635,23 @@ class WalletService {
       await approveTx.wait();
       console.log(`${TAG}[APPROVE_USDC][OK]`);
 
-      // ── 4. IDIA.delegate(self) ────────────────────────────────
+      // -- 4. USDC.approve(SynapseVault) -- for credit purchases ----------
+      // Approving a smart contract avoids MetaMask's EOA phishing warning.
+      setStage("approving_vault");
+      const vaultAddress = SYNAPSE_VAULT_ADDRESSES[this.activeNetwork];
+      let vaultApproveTxHash = "VAULT_NOT_CONFIGURED";
+      if (vaultAddress && ethers.isAddress(vaultAddress)) {
+        console.log(`${TAG}[APPROVE_VAULT][START] spender=${vaultAddress}`);
+        const vaultApproveTx = await usdcContract.approve(vaultAddress, ethers.MaxUint256);
+        console.log(`${TAG}[APPROVE_VAULT][BROADCAST] hash=${vaultApproveTx.hash}`);
+        await vaultApproveTx.wait();
+        console.log(`${TAG}[APPROVE_VAULT][OK]`);
+        vaultApproveTxHash = vaultApproveTx.hash;
+      } else {
+        console.warn(`${TAG}[APPROVE_VAULT][SKIP] No SynapseVault configured for ${this.activeNetwork}`);
+      }
+
+      // -- 5. IDIA.delegate(self) -----------------------------------------
       setStage("delegating_self");
       const idia = new ethers.Contract(idiaToken, IDIA_TOKEN_ABI, signer);
       console.log(`${TAG}[DELEGATE_SELF][START] delegatee=${address}`);
@@ -728,7 +660,7 @@ class WalletService {
       await delegateTx.wait();
       console.log(`${TAG}[DELEGATE_SELF][OK]`);
 
-      // Suppress SelfDelegateEducationModal for this wallet — already delegated.
+      // Suppress SelfDelegateEducationModal for this wallet
       try {
         localStorage.setItem(`idia_self_delegate_edu_seen_v1:${address.toLowerCase()}`, "1");
       } catch {}
@@ -738,8 +670,9 @@ class WalletService {
       return {
         dripTxHash,
         approveTxHash: approveTx.hash,
+        vaultApproveTxHash,
         delegateTxHash: delegateTx.hash,
-        relayerAddress,
+        relayerAddress: relayerAddress || "",
       };
     } catch (err: any) {
       console.error(`${TAG}[END:FAIL] ${err?.message ?? err}`);

@@ -11,6 +11,7 @@ import Auth from "./pages/Auth";
 import Index from "./pages/Index";
 
 import Settings from "./pages/Settings";
+import IdentityLedger from "./pages/IdentityLedger";
 import NotFound from "./pages/NotFound";
 import SecureVault from "./pages/SecureVault";
 import RecoveryPhrase from "./pages/RecoveryPhrase";
@@ -19,6 +20,7 @@ import TermsOfService from "./pages/TermsOfService";
 // NFC PAYMENT IMPORTS
 import { usePaymentDeepLink } from "@/hooks/usePaymentDeepLink";
 import NfcPaymentModal from "@/components/NfcPaymentModal";
+import { startPushBootstrap } from "@/utils/pushBootstrap";
 // Architectural Note: Defined outside to prevent re-instantiation on re-renders
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -46,6 +48,7 @@ const App = () => {
 
   useEffect(() => {
     console.log("[START] App Lifecycle: Initializing Sovereign Routing & Auth Manifest...");
+    startPushBootstrap();
 
     // ── One-shot stale-session guard (post legacy-JWT rotation) ──
     console.log("[AUTH_SESSION_GUARD][CHECK][START] Validating current user session keys against rotated JWT secrets.");
@@ -150,12 +153,13 @@ const App = () => {
           <BrowserRouter>
             <Routes>
               <Route path="/auth" element={session ? <Navigate to="/" replace /> : <Auth />} />
-              <Route path="/" element={session ? <Index /> : <Navigate to="/auth" replace />} />
+              <Route path="/" element={<Index />} />
               <Route path="/dashboard" element={session ? <Index /> : <Navigate to="/auth" replace />} />
               
               <Route path="/terms" element={session ? <TermsOfService /> : <Navigate to="/auth" replace />} />
               <Route path="/recovery-phrase" element={session ? <RecoveryPhrase /> : <Navigate to="/auth" replace />} />
               <Route path="/settings" element={session ? <Settings /> : <Navigate to="/auth" replace />} />
+              <Route path="/settings/ledger" element={session ? <IdentityLedger /> : <Navigate to="/auth" replace />} />
               <Route path="/secure-vault" element={session ? <SecureVault /> : <Navigate to="/auth" replace />} />
               <Route path="/secure_vault" element={<Navigate to="/secure-vault" replace />} />
               <Route path="*" element={<NotFound />} />

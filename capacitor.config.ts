@@ -45,6 +45,9 @@ const config: CapacitorConfig = {
       serverClientId: "349472255801-091p5a3320h0kb9636hjsd2otfs160ct.apps.googleusercontent.com",
       forceCodeForRefreshToken: false,
     },
+    PushNotifications: {
+      presentationOptions: ["badge", "sound", "alert"],
+    },
   },
   android: {
     // Preserve WebView debugging across updates (dev-only impact in release builds)

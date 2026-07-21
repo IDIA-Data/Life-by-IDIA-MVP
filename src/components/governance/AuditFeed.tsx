@@ -1,8 +1,28 @@
 import React, { useEffect, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, History, Fingerprint, MessageSquare, PenTool, Rocket, Archive, Gavel, FileText, CheckCircle2, Shield, Info, Link as LinkIcon } from "lucide-react";
+import {
+  Loader2,
+  History,
+  Fingerprint,
+  MessageSquare,
+  PenTool,
+  Rocket,
+  Archive,
+  Gavel,
+  FileText,
+  CheckCircle2,
+  Shield,
+  Info,
+  Link as LinkIcon,
+  ChevronDown,
+} from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 
 interface LedgerRow {
   id: string;
@@ -105,102 +125,110 @@ const AuditFeed: React.FC = () => {
     };
   }, []);
 
-  if (loading) {
-    return (
-      <div className="flex justify-center py-6">
-        <Loader2 className="w-5 h-5 animate-spin text-teal-600" />
-      </div>
-    );
-  }
-
   return (
-    <section className="space-y-4 pt-2">
-      <div className="flex items-center justify-between px-2">
-        <h2 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground flex items-center gap-2">
-          <History size={14} className="text-teal-600" /> Immutable Audit Trail
-        </h2>
-        
-        {/* Collapsed Info Tooltip */}
-        <div className="group relative flex items-center">
-          <Info size={14} className="text-muted-foreground/50 hover:text-teal-600 transition-colors cursor-help" />
-          <div className="absolute right-0 top-full mt-2 w-60 p-3 bg-slate-800 text-slate-100 text-[10px] rounded-xl shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50 pointer-events-none">
-            <span className="font-bold uppercase tracking-widest text-teal-400 block mb-1">System of Record</span>
-            This ledger cryptographically anchors every action, signature, and state change within the protocol. Each event generates an auditable hash (ACA), ensuring complete legal transparency.
-          </div>
-        </div>
-      </div>
-      
-      {rows.length === 0 ? (
-        <div className="py-10 text-center opacity-40 bg-slate-50 dark:bg-muted/30 rounded-3xl border border-slate-100 dark:border-border">
-          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">No ACA entries recorded</p>
-        </div>
-      ) : (
-        <div className="relative pl-4 space-y-6 before:absolute before:inset-y-2 before:left-[27px] before:w-[2px] before:bg-slate-100 dark:before:bg-slate-800/60">
-          {rows.map((r) => {
-            // Favor consent_type if available, otherwise use source_id for styling
-            const config = getActionConfig(r.consent_type || r.source_id);
-            const Icon = config.icon;
-            
-            return (
-              <div key={r.id} className="relative pl-8">
-                {/* Timeline Node */}
-                <div className={`absolute left-[-11px] top-3 p-1.5 rounded-full border-[3px] border-white dark:border-background z-10 ${config.color}`}>
-                  <Icon size={12} strokeWidth={3} />
+    <Collapsible defaultOpen={false}>
+      <section className="space-y-4 pt-2">
+        <CollapsibleTrigger asChild>
+          <div className="flex items-center justify-between px-2 cursor-pointer group">
+            <h2 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground flex items-center gap-2">
+              <History size={14} className="text-teal-600" /> Immutable Audit Trail
+            </h2>
+            <div className="flex items-center gap-2">
+              {/* Collapsed Info Tooltip */}
+              <div className="relative flex items-center" onClick={(e) => e.stopPropagation()}>
+                <Info size={14} className="text-muted-foreground/50 hover:text-teal-600 transition-colors cursor-help" />
+                <div className="absolute right-0 top-full mt-2 w-60 p-3 bg-slate-800 text-slate-100 text-[10px] rounded-xl shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50 pointer-events-none">
+                  <span className="font-bold uppercase tracking-widest text-teal-400 block mb-1">System of Record</span>
+                  This ledger cryptographically anchors every action, signature, and state change within the protocol. Each event generates an auditable hash (ACA), ensuring complete legal transparency.
                 </div>
-
-                <Card className={`rounded-2xl border-none shadow-sm bg-slate-50/50 dark:bg-card/50 overflow-hidden`}>
-                  <CardContent className="p-3 sm:p-4">
-                    <div className="flex-1 min-w-0 space-y-1.5">
-                      {/* Header row: Action & Time */}
-                      <div className="flex items-center justify-between gap-2 flex-wrap">
-                        <Badge variant="outline" className={`bg-white dark:bg-background border ${config.border} text-[9px] font-black uppercase tracking-wider`}>
-                          {config.label}
-                        </Badge>
-                        <span className="text-[9px] font-black uppercase tracking-widest text-muted-foreground shrink-0">
-                          {new Date(r.created_at).toLocaleString(undefined, { 
-                            month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' 
-                          })}
-                        </span>
-                      </div>
-
-                      {/* Actor Information */}
-                      <div className="flex items-center gap-1.5 text-xs text-slate-700 dark:text-slate-300 pt-1">
-                        <Fingerprint size={12} className="text-muted-foreground shrink-0" />
-                        <span className="font-mono text-[10px] truncate">{formatAddress(r)}</span>
-                      </div>
-
-                      {/* ACA Protocol Trace */}
-                      <div className="flex items-center gap-1.5 mt-1 pt-1">
-                        <Shield size={10} className="text-teal-600/70 shrink-0" />
-                        <span className="font-mono text-[8px] text-teal-700/70 dark:text-teal-400/70 uppercase tracking-widest truncate">
-                          ACA: {r.aca_hash_key}
-                        </span>
-                      </div>
-
-                      {/* Structured Metadata: Scopes & TX Hash */}
-                      <div className="flex flex-wrap gap-1.5 mt-2 pt-2 border-t border-black/5 dark:border-white/5">
-                        {r.consent_scope && r.consent_scope.map((scope, idx) => (
-                          <span key={idx} className="inline-flex items-center rounded-md bg-white dark:bg-background border border-slate-100 dark:border-slate-800 px-1.5 py-0.5 text-[9px] font-medium text-muted-foreground shadow-sm">
-                            Scope: <span className="ml-1 text-foreground">{scope}</span>
-                          </span>
-                        ))}
-                        
-                        {r.tx_hash && (
-                          <span className="inline-flex items-center rounded-md bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-800 px-1.5 py-0.5 text-[9px] font-medium text-indigo-700 dark:text-indigo-300 shadow-sm max-w-full">
-                            <LinkIcon size={8} className="mr-1 shrink-0" />
-                            TX: <span className="ml-1 font-mono truncate">{r.tx_hash}</span>
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
               </div>
-            );
-          })}
-        </div>
-      )}
-    </section>
+              <ChevronDown
+                size={16}
+                className="text-muted-foreground transition-transform duration-300 group-data-[state=open]:rotate-180"
+                aria-hidden="true"
+              />
+            </div>
+          </div>
+        </CollapsibleTrigger>
+
+        <CollapsibleContent>
+          {loading ? (
+            <div className="flex justify-center py-6">
+              <Loader2 className="w-5 h-5 animate-spin text-teal-600" />
+            </div>
+          ) : rows.length === 0 ? (
+            <div className="py-10 text-center opacity-40 bg-slate-50 dark:bg-muted/30 rounded-3xl border border-slate-100 dark:border-border">
+              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">No ACA entries recorded</p>
+            </div>
+          ) : (
+            <div className="relative pl-4 space-y-6 before:absolute before:inset-y-2 before:left-[27px] before:w-[2px] before:bg-slate-100 dark:before:bg-slate-800/60">
+              {rows.map((r) => {
+                // Favor consent_type if available, otherwise use source_id for styling
+                const config = getActionConfig(r.consent_type || r.source_id);
+                const Icon = config.icon;
+                
+                return (
+                  <div key={r.id} className="relative pl-8">
+                    {/* Timeline Node */}
+                    <div className={`absolute left-[-11px] top-3 p-1.5 rounded-full border-[3px] border-white dark:border-background z-10 ${config.color}`}>
+                      <Icon size={12} strokeWidth={3} />
+                    </div>
+
+                    <Card className={`rounded-2xl border-none shadow-sm bg-slate-50/50 dark:bg-card/50 overflow-hidden`}>
+                      <CardContent className="p-3 sm:p-4">
+                        <div className="flex-1 min-w-0 space-y-1.5">
+                          {/* Header row: Action & Time */}
+                          <div className="flex items-center justify-between gap-2 flex-wrap">
+                            <Badge variant="outline" className={`bg-white dark:bg-background border ${config.border} text-[9px] font-black uppercase tracking-wider`}>
+                              {config.label}
+                            </Badge>
+                            <span className="text-[9px] font-black uppercase tracking-widest text-muted-foreground shrink-0">
+                              {new Date(r.created_at).toLocaleString(undefined, { 
+                                month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' 
+                              })}
+                            </span>
+                          </div>
+
+                          {/* Actor Information */}
+                          <div className="flex items-center gap-1.5 text-xs text-slate-700 dark:text-slate-300 pt-1">
+                            <Fingerprint size={12} className="text-muted-foreground shrink-0" />
+                            <span className="font-mono text-[10px] truncate">{formatAddress(r)}</span>
+                          </div>
+
+                          {/* ACA Protocol Trace */}
+                          <div className="flex items-center gap-1.5 mt-1 pt-1">
+                            <Shield size={10} className="text-teal-600/70 shrink-0" />
+                            <span className="font-mono text-[8px] text-teal-700/70 dark:text-teal-400/70 uppercase tracking-widest truncate">
+                              ACA: {r.aca_hash_key}
+                            </span>
+                          </div>
+
+                          {/* Structured Metadata: Scopes & TX Hash */}
+                          <div className="flex flex-wrap gap-1.5 mt-2 pt-2 border-t border-black/5 dark:border-white/5">
+                            {r.consent_scope && r.consent_scope.map((scope, idx) => (
+                              <span key={idx} className="inline-flex items-center rounded-md bg-white dark:bg-background border border-slate-100 dark:border-slate-800 px-1.5 py-0.5 text-[9px] font-medium text-muted-foreground shadow-sm">
+                                Scope: <span className="ml-1 text-foreground">{scope}</span>
+                              </span>
+                            ))}
+                            
+                            {r.tx_hash && (
+                              <span className="inline-flex items-center rounded-md bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-800 px-1.5 py-0.5 text-[9px] font-medium text-indigo-700 dark:text-indigo-300 shadow-sm max-w-full">
+                                <LinkIcon size={8} className="mr-1 shrink-0" />
+                                TX: <span className="ml-1 font-mono truncate">{r.tx_hash}</span>
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </CollapsibleContent>
+      </section>
+    </Collapsible>
   );
 };
 

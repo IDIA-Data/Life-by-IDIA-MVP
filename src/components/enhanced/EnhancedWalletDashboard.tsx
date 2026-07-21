@@ -239,9 +239,12 @@ const EnhancedWalletDashboard: React.FC = () => {
   // ── Native bridge ──
   useEffect(() => {
     const handleNativeAuthMessage = (event: MessageEvent) => {
-      if (event.data?.type === "IDIA_AUTH_COMPLETE") {
+      const type = event.data?.type;
+      if (type === "IDIA_AUTH_COMPLETE") {
         console.log("📱 [NATIVE_BRIDGE] Handshake Confirmed. Transitioning to Active Dashboard.");
         window.location.href = "/dashboard";
+      } else if (type === "IDIA_AUTH_CANCELLED") {
+        console.log("📱 [NATIVE_BRIDGE] Auth cancelled by user or failed.");
       }
     };
     window.addEventListener("message", handleNativeAuthMessage);

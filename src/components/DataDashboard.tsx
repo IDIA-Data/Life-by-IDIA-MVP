@@ -4,14 +4,12 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Activity, CheckCircle, DollarSign, FileKey, Copy, Truck, Car } from "lucide-react";
+import { Activity, CheckCircle, DollarSign, FileKey, Copy } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { supabase as typedSupabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import AppleHealthModal from "./AppleHealthModal";
 import AndroidHealthModal from "./AndroidHealthModal";
-import TruckstopConnectionModal from "./TruckstopConnectionModal";
-import FordConnectionModal from "./FordConnectionModal";
 import { isAndroid, isIOS, isWeb } from "@/services/platform";
 import { useWalletBalance } from "@/hooks/useWalletBalance";
 
@@ -37,8 +35,6 @@ const DataDashboard = () => {
   // Modal States
   const [showAppleHealthModal, setShowAppleHealthModal] = useState(false);
   const [showAndroidHealthModal, setShowAndroidHealthModal] = useState(false);
-  const [showTruckstopModal, setShowTruckstopModal] = useState(false);
-  const [showFordModal, setShowFordModal] = useState(false);
 
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [acaRecords, setAcaRecords] = useState<any[]>([]);
@@ -291,8 +287,6 @@ const DataDashboard = () => {
   const visibleConnections = connections.filter((c) => {
     if (c.connection_type === "apple_health") return isIOS() || isWeb();
     if (c.connection_type === "health_connect") return isAndroid();
-    if (c.connection_type === "truckstop") return true;
-    if (c.connection_type === "ford") return true;
     return false;
   });
 
@@ -309,8 +303,6 @@ const DataDashboard = () => {
 
   const healthType = isAndroid() ? "health_connect" : "apple_health";
   const hasHealth = getConnectionStatus(healthType);
-  const hasTruckstop = getConnectionStatus("truckstop");
-  const hasFord = getConnectionStatus("ford");
 
   return (
     <div className="space-y-4">
@@ -373,35 +365,7 @@ const DataDashboard = () => {
                 </div>
               )}
 
-              {/* Ford Connection */}
-              {!hasFord && (
-                <div
-                  className="relative cursor-pointer group flex flex-col items-center p-4 bg-card rounded-2xl border border-border hover:shadow-md transition-all"
-                  onClick={() => setShowFordModal(true)}
-                >
-                  <div className="w-14 h-14 rounded-full overflow-hidden bg-blue-50 flex items-center justify-center mb-2">
-                    <Car className="w-7 h-7 text-blue-600" />
-                  </div>
-                  <p className="text-xs font-bold text-center">FordConnect</p>
-                  <p className="text-[9px] text-muted-foreground mt-1">Vehicle Telemetry</p>
-                </div>
-              )}
-
-              {/* Truckstop Connection */}
-              {!hasTruckstop && (
-                <div
-                  className="relative cursor-pointer group flex flex-col items-center p-4 bg-card rounded-2xl border border-border hover:shadow-md transition-all"
-                  onClick={() => setShowTruckstopModal(true)}
-                >
-                  <div className="w-14 h-14 rounded-full overflow-hidden bg-orange-50 flex items-center justify-center mb-2">
-                    <Truck className="w-7 h-7 text-[#FF5A00]" />
-                  </div>
-                  <p className="text-xs font-bold text-center">Truckstop Go</p>
-                  <p className="text-[9px] text-muted-foreground mt-1">Freight Telemetry</p>
-                </div>
-              )}
-
-              {hasHealth && hasFord && hasTruckstop && (
+              {hasHealth && (
                 <div className="col-span-full text-center py-6 text-muted-foreground">
                   <CheckCircle className="w-8 h-8 mx-auto mb-2 opacity-50 text-teal-600" />
                   <p className="text-sm">All available sources connected</p>
@@ -421,8 +385,6 @@ const DataDashboard = () => {
                     onClick={() => {
                       if (connection.connection_type === "apple_health") setShowAppleHealthModal(true);
                       else if (connection.connection_type === "health_connect") setShowAndroidHealthModal(true);
-                      else if (connection.connection_type === "ford") setShowFordModal(true);
-                      else if (connection.connection_type === "truckstop") setShowTruckstopModal(true);
                     }}
                   >
                     <div className="relative">
@@ -437,8 +399,6 @@ const DataDashboard = () => {
                             className="w-8 h-8 object-contain"
                           />
                         )}
-                        {connection.connection_type === "ford" && <Car className="w-8 h-8 text-blue-600" />}
-                        {connection.connection_type === "truckstop" && <Truck className="w-8 h-8 text-[#FF5A00]" />}
                       </div>
                       <div className="absolute -top-1 -right-1 w-5 h-5 bg-emerald-500 rounded-full border-2 border-background flex items-center justify-center">
                         <div className="w-2 h-2 bg-white rounded-full animate-pulse" />
@@ -545,34 +505,6 @@ const DataDashboard = () => {
         onDisconnect={async () => {
           await fetchConnections();
           setShowAndroidHealthModal(false);
-        }}
-      />
-
-      <FordConnectionModal
-        isOpen={showFordModal}
-        onClose={() => setShowFordModal(false)}
-        onComplete={async () => {
-          setShowFordModal(false);
-          await fetchConnections();
-        }}
-        existingConnection={getConnectionStatus("ford")}
-        onDisconnect={async () => {
-          await fetchConnections();
-          setShowFordModal(false);
-        }}
-      />
-
-      <TruckstopConnectionModal
-        isOpen={showTruckstopModal}
-        onClose={() => setShowTruckstopModal(false)}
-        onComplete={async () => {
-          setShowTruckstopModal(false);
-          await fetchConnections();
-        }}
-        existingConnection={getConnectionStatus("truckstop")}
-        onDisconnect={async () => {
-          await fetchConnections();
-          setShowTruckstopModal(false);
         }}
       />
     </div>

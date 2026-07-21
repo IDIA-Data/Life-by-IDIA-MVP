@@ -10,6 +10,7 @@ import GovernanceScreen from "./GovernanceScreen";
 import ProScreen from "./pro/ProScreen";
 import Header from "./Header";
 import { FriendAssistantProvider } from "./FriendAssistant";
+import { walletService } from "@/services/walletService";
 import WelcomeSequence from "./life/WelcomeSequence";
 import NoWalletNudge from "./wallet/NoWalletNudge";
 import SelfDelegateEducationModal from "./wallet/SelfDelegateEducationModal";
@@ -31,6 +32,7 @@ const MainApp = () => {
 
   const { profile, loading: profileLoading } = useEnhancedProfile();
   const [isProvisioned, setIsProvisioned] = useState({ wallet: false, fbo: false });
+  const [localVaultExists, setLocalVaultExists] = useState<boolean | null>(null);
   const [showSelfDelegateEdu, setShowSelfDelegateEdu] = useState(false);
   const [selfDelegateEduAddress, setSelfDelegateEduAddress] = useState<string | null>(null);
 
@@ -57,6 +59,16 @@ const MainApp = () => {
       const hasWallet = !!profile?.wallet_address;
       const hasFBO = !!profile?.fbo_account_id;
       setIsProvisioned({ wallet: hasWallet, fbo: hasFBO });
+      (async () => {
+        try {
+          const exists = await walletService.hasWallet();
+          setLocalVaultExists(exists);
+          console.log(`[AUDIT] Local Keychain vault exists: ${exists}`);
+        } catch (e) {
+          console.warn("[WARN] MainApp: Local vault check failed", e);
+          setLocalVaultExists(false);
+        }
+      })();
       console.log(`[END] MainApp Audit Complete - Pay Ready: ${isPayReady}, Vault: ${hasWallet}, FBO: ${hasFBO}`);
     }
   }, [profile, profileLoading, isPayReady]);
@@ -66,6 +78,7 @@ const MainApp = () => {
       const address: string | undefined = event?.detail?.address;
       console.log("[SYNC] Immediate Vault Hydration:", address);
       setIsProvisioned((prev) => ({ ...prev, wallet: true }));
+      setLocalVaultExists(true);
       setNudgeDismissed(true);
       if (address) {
         try {
@@ -119,6 +132,7 @@ const MainApp = () => {
     !profileLoading &&
     !!profile &&
     !isProvisioned.wallet &&
+    localVaultExists === false &&
     !nudgeDismissed;
 
   // AI Assistant Triggers

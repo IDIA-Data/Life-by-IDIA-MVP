@@ -17,9 +17,9 @@ import { ethers } from "ethers";
 import { PROTOCOL, ACTIVE_DEPLOYMENT, GOVERNOR_ABI } from "@/config/contracts";
 import { NETWORKS, walletService } from "@/services/walletService";
 
-// Direct-RPC chain state read — snapshot block, dynamic quorum, and live tally.
-// Quorum is fetched dynamically per snapshot block so the UI auto-adapts if
-// the protocol upgrades to a floating relative quorum in the future.
+// Direct-RPC chain state read — snapshot block, live adjustable quorum, and live tally.
+// V3 quorum is a mutable Governor parameter, so cards read the current contract
+// value instead of DB fields or historical snapshot math.
 export interface ChainState {
   snapshotBlock: number | null;
   deadlineBlock: number | null;
@@ -29,6 +29,26 @@ export interface ChainState {
   againstVotes: number;
   abstainVotes: number;
   state: number | null;
+}
+
+async function readLiveGovernorQuorum(gov: ethers.Contract, provider: ethers.JsonRpcProvider): Promise<bigint> {
+  try {
+    const params = await gov.getQuorumParams();
+    const currentQuorum = params?.currentQuorum ?? params?.[0];
+    if (currentQuorum != null && BigInt(currentQuorum) > 0n) return BigInt(currentQuorum);
+  } catch {
+    // Older governors do not expose V3 adjustable quorum params.
+  }
+
+  try {
+    const threshold = await gov.quorumThreshold();
+    if (threshold != null && BigInt(threshold) > 0n) return BigInt(threshold);
+  } catch {
+    // Fall through to OpenZeppelin quorum(timepoint) for legacy governors.
+  }
+
+  const block = await provider.getBlockNumber();
+  return BigInt(await gov.quorum(Math.max(block - 1, 0)));
 }
 
 export async function readChainState(onChainId?: string | null): Promise<ChainState> {
@@ -52,7 +72,7 @@ export async function readChainState(onChainId?: string | null): Promise<ChainSt
   if (!onChainId || onChainId.trim() === "") {
     try {
       const block = await provider.getBlockNumber();
-      const rawQ = await gov.quorum(block - 1);
+      const rawQ = await readLiveGovernorQuorum(gov, provider);
       return { ...empty, currentBlock: block, quorum: Number(ethers.formatUnits(rawQ, 18)) };
     } catch {
       return empty;
@@ -79,19 +99,13 @@ export async function readChainState(onChainId?: string | null): Promise<ChainSt
   let rawQuorum: bigint = 0n;
   let rawVotes: [bigint, bigint, bigint] = [0n, 0n, 0n];
 
+  rawQuorum = await readLiveGovernorQuorum(gov, provider).catch(() => 0n);
+
   if (state !== null && state > 0) {
-    const [q, v] = await Promise.all([
-      snapshotBlock
-        ? gov.quorum(snapshotBlock).catch(() => 0n)
-        : Promise.resolve(0n),
+    const [v] = await Promise.all([
       gov.proposalVotes(onChainId).catch(() => [0n, 0n, 0n] as any),
     ]);
-    rawQuorum = q;
     rawVotes = v as [bigint, bigint, bigint];
-  } else if (state === 0 && currentBlock) {
-    // Pending: query quorum against the latest finalized block so the UI shows
-    // the live threshold without poking a future snapshot block.
-    rawQuorum = await gov.quorum(currentBlock - 1).catch(() => 0n);
   }
 
   return {
@@ -156,11 +170,49 @@ export interface Proposal {
   on_chain_id?: string | null;
   lifecycle_phase?: string | null;
   created_at?: string | null;
+  end_date?: string | null;
+  committee_id?: string | null;
   indexed_state?: number | null;
   proposal_targets?: string[] | null;
   proposal_values?: string[] | null;
   proposal_calldatas?: string[] | null;
   chain_description?: string | null;
+}
+
+/**
+ * Deadline-aware "voting closed" predicate. Chain deadline block wins when
+ * available; falls back to the DB end_date for motions that never anchored.
+ */
+export function isVotingClosed(
+  chain: Pick<ChainState, "currentBlock" | "deadlineBlock"> | undefined | null,
+  dbEndDate: string | null | undefined,
+): boolean {
+  if (chain?.currentBlock != null && chain?.deadlineBlock != null && chain.deadlineBlock > 0) {
+    if (chain.currentBlock > chain.deadlineBlock) return true;
+  }
+  if (dbEndDate) {
+    const t = new Date(dbEndDate).getTime();
+    if (Number.isFinite(t) && t <= Date.now()) return true;
+  }
+  return false;
+}
+
+const MOTION_DELIBERATION_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+
+/**
+ * Deadline resolver for DB-only governance rows (no on-chain id, or a blank
+ * on_chain_id string). Any such row is considered expired when its end_date
+ * has passed OR when its created_at falls outside the 7-day deliberation
+ * window. Applies to motions AND legacy DB-only proposals alike.
+ */
+export function isExpiredDbMotion(
+  proposal: Pick<Proposal, "on_chain_id" | "committee_id" | "created_at" | "end_date">,
+): boolean {
+  if (proposal.on_chain_id && proposal.on_chain_id.trim() !== "") return false;
+  if (isVotingClosed(undefined, proposal.end_date)) return true;
+  if (!proposal.created_at) return false;
+  const createdAt = new Date(proposal.created_at).getTime();
+  return Number.isFinite(createdAt) && createdAt + MOTION_DELIBERATION_WINDOW_MS <= Date.now();
 }
 
 const sameEvmAddress = (a?: string | null, b?: string | null) =>
@@ -200,10 +252,28 @@ export function classifyProposalBucket(proposal: Proposal, chainState?: ChainSta
   const phase = (proposal.lifecycle_phase || "").toLowerCase();
   if (phase === "archived" || phase === "drift") return "DEFEATED";
   const hasOnChainId = !!proposal.on_chain_id?.trim();
+
+  // Deadline-aware short-circuit: if voting is closed (chain deadline block
+  // passed OR DB end_date in the past) and the proposal has not reached a
+  // success/queued/executed terminal state, route it to the archive.
+  const votingClosed = isVotingClosed(chainState, proposal.end_date) || isExpiredDbMotion(proposal);
+  const terminalSuccess =
+    (chainState?.state != null && FINAL_PASSED.has(chainState.state)) ||
+    ["succeeded", "queued", "executed", "settled"].includes(phase);
+  if (votingClosed && !terminalSuccess) return "DEFEATED";
+
+  // Committee motions live in the Delaware motion workspace until they expire
+  // or anchor on-chain. Do not leak active/draft DB-only motions into the
+  // Wyoming proposal feed; expired ones are already routed to Archive above.
+  if (!hasOnChainId && proposal.committee_id) return "UNRESOLVED";
+
   if (chainState?.state != null) return classifyBucket(chainState.state, hasOnChainId);
-  if (hasOnChainId) return "UNRESOLVED";
+  // Chain read completed but the current Governor doesn't recognize this id
+  // (legacy Governor orphan). Archive it — don't trust the DB "active" phase.
+  if (chainState && hasOnChainId) return "DEFEATED";
   const dbState = deriveDbState(proposal);
-  if (dbState != null) return classifyBucket(dbState, false);
+  if (dbState != null) return classifyBucket(dbState, hasOnChainId);
+  if (hasOnChainId) return "UNRESOLVED";
   return "ACTIVE_FEED";
 }
 
@@ -1068,10 +1138,19 @@ export const ProposalCard: React.FC<{
 
   // ── Shared chain-derived display values ────────────────────────────
   const chainName = chain.state != null ? STATE_NAME[chain.state] : null;
-  const isActive = chain.state === 1;
+  const rawIsActive = chain.state === 1;
   const isFinalDefeated = chain.state != null && FINAL_DEFEATED.has(chain.state);
   const isFinalPassed = chain.state != null && FINAL_PASSED.has(chain.state);
-  const isFinal = isFinalDefeated || isFinalPassed;
+  // Deadline resolver — a proposal whose voting window has closed can never
+  // render as Live/Active/Deliberation regardless of DB status text.
+  const deadlineClosed = isVotingClosed(chain, proposal.end_date) || isExpiredDbMotion(proposal);
+  const isFinal = isFinalDefeated || isFinalPassed || (deadlineClosed && !isFinalPassed);
+  const isActive = rawIsActive && !deadlineClosed;
+  // OZ semantics: For + Abstain count toward quorum; Against does not.
+  const quorumReached = chain.quorum > 0 && (chain.forVotes + chain.abstainVotes) >= chain.quorum;
+  const majorityFor = chain.forVotes > chain.againstVotes;
+  const isPassing = isActive && quorumReached && majorityFor;
+  const isFailing = isActive && quorumReached && !majorityFor;
 
   // Progress numerator: on-chain For votes when available, else off-chain intents
   const forDisplay = chain.forVotes;
@@ -1208,13 +1287,23 @@ export const ProposalCard: React.FC<{
     ? "border-rose-200 bg-rose-50/60 text-rose-700 dark:bg-rose-950/30 dark:text-rose-200 dark:border-rose-900/50"
     : isFinalPassed
       ? "border-emerald-200 bg-emerald-50/60 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-200 dark:border-emerald-900/50"
-      : isActive
-        ? "border-orange-200 bg-orange-50/60 text-orange-700 dark:bg-orange-950/30 dark:text-orange-200 dark:border-orange-900/50"
-        : chain.state === 0
-          ? "border-amber-200 bg-amber-50/60 text-amber-700 dark:bg-amber-950/30 dark:text-amber-200 dark:border-amber-900/50"
-          : "border-slate-200 bg-slate-50 text-slate-600 dark:bg-slate-900/40 dark:text-slate-300 dark:border-slate-800";
-  const statusIcon = isFinalDefeated ? "✘" : isFinalPassed ? "✅" : isActive ? "⚡" : chain.state === 0 ? "⏳" : "•";
-  const statusLabel = chainName || (chain.state === null ? "Syncing" : proposal.status);
+      : isPassing
+        ? "border-emerald-200 bg-emerald-50/60 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-200 dark:border-emerald-900/50"
+        : isFailing
+          ? "border-rose-200 bg-rose-50/60 text-rose-700 dark:bg-rose-950/30 dark:text-rose-200 dark:border-rose-900/50"
+          : isActive
+            ? "border-orange-200 bg-orange-50/60 text-orange-700 dark:bg-orange-950/30 dark:text-orange-200 dark:border-orange-900/50"
+            : chain.state === 0
+              ? "border-amber-200 bg-amber-50/60 text-amber-700 dark:bg-amber-950/30 dark:text-amber-200 dark:border-amber-900/50"
+              : "border-slate-200 bg-slate-50 text-slate-600 dark:bg-slate-900/40 dark:text-slate-300 dark:border-slate-800";
+  const statusIcon = isFinalDefeated ? "✘" : isFinalPassed ? "✅" : isPassing ? "✅" : isFailing ? "⚠" : isActive ? "⚡" : chain.state === 0 ? "⏳" : "•";
+  const statusLabel = deadlineClosed && !isFinalPassed
+    ? "Voting Closed · Deadline Passed"
+    : isPassing
+      ? "Passing · Voting Open"
+      : isFailing
+        ? "Failing · Voting Open"
+        : chainName || (chain.state === null ? "Syncing" : proposal.status);
 
   return (
     <>
@@ -1608,7 +1697,7 @@ const ActiveProposalsList: React.FC<{
         // Sequential to avoid RPC 429s — Supabase first (cheap), then on-chain.
         const dbProposals = await (supabase as any)
           .from("dao_proposals")
-          .select("id, title, description, status, proposer_id, on_chain_id, lifecycle_phase, created_at, proposal_targets, proposal_values, proposal_calldatas")
+          .select("id, title, description, status, proposer_id, on_chain_id, lifecycle_phase, created_at, end_date, committee_id, proposal_targets, proposal_values, proposal_calldatas")
           .order("created_at", { ascending: false });
         if (dbProposals.error) throw dbProposals.error;
 
@@ -1631,8 +1720,7 @@ const ActiveProposalsList: React.FC<{
             .filter((x: unknown): x is string => typeof x === "string" && x.length > 0),
         );
 
-        // ON-CHAIN MANDATE: drop any DB row that never anchored on-chain.
-        const dbRows: Proposal[] = (dbProposals.data || []).filter((r: any) => typeof r.on_chain_id === "string" && r.on_chain_id.length > 0).map((r: any) => {
+        const dbRows: Proposal[] = (dbProposals.data || []).map((r: any) => {
           const indexed = r.on_chain_id ? indexedById.get(r.on_chain_id) : undefined;
           return {
             id: r.id,
@@ -1645,6 +1733,8 @@ const ActiveProposalsList: React.FC<{
             on_chain_id: r.on_chain_id ?? null,
             lifecycle_phase: indexed?.stateName ?? r.lifecycle_phase ?? null,
             created_at: r.created_at ?? null,
+            end_date: r.end_date ?? null,
+            committee_id: r.committee_id ?? null,
             indexed_state: indexed?.state ?? null,
             proposal_targets: r.proposal_targets ?? indexed?.targets ?? null,
             proposal_values: r.proposal_values ?? indexed?.values ?? null,

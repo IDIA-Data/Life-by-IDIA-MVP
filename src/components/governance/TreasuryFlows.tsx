@@ -59,12 +59,7 @@ const TreasuryFlows: React.FC = () => {
     const fetchFlows = async () => {
       console.log("[GLOBAL_TREASURY_FLOWS] START: Initializing multi-tenant ledger aggregation pass.");
       try {
-        const { data, error } = await supabase
-          .from("synapse_credit_ledger" as any)
-          .select("id, entry_type, amount, description, metadata, created_at")
-          .gte("created_at", new Date(Date.now() - 30 * 86400_000).toISOString())
-          .order("created_at", { ascending: false })
-          .limit(1000);
+        const { data, error } = await (supabase as any).rpc("governance_global_treasury_flows");
 
         if (error) throw error;
 

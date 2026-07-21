@@ -9,6 +9,8 @@ import { generateACAHash } from "@/utils/acaGenerator";
 import { recordACA } from "@/utils/acaLedger";
 import { toast } from "@/hooks/use-toast";
 import { getAscensionLevel } from "@/utils/governanceGate";
+import { governanceService } from "@/services/governanceService";
+import { walletService } from "@/services/walletService";
 
 interface MotionThreadProps {
   proposal: {
@@ -105,7 +107,11 @@ const MotionThread: React.FC<MotionThreadProps> = ({ proposal, open, onClose, on
 
       const hatSet = new Set<string>((hatsRes.data || []).map((h: any) => h.hat_type));
       setLevel(getAscensionLevel(hatSet));
-      setHasHat(proposal.committee_id ? hatSet.has(proposal.committee_id) : false);
+      // L3 Tophat is a universal committee override — matches CommitteeRosterModal's honorary-L3 display.
+      setHasHat(
+        hatSet.has("tophat") ||
+        (proposal.committee_id ? hatSet.has(proposal.committee_id) : false)
+      );
       
       setComments(enrichedComments);
       setSignatures(sigsRes.data || []);
@@ -177,18 +183,81 @@ const MotionThread: React.FC<MotionThreadProps> = ({ proposal, open, onClose, on
   const escalate = async () => {
     console.log("[MOTION_THREAD][ESCALATE][START] Initiating DAO floor escalation.");
     if (!proposal || !userId) return;
+
+    // ── On-chain mandate: wallet must be connected before anchoring ──
+    const signer = walletService.getConnectedSigner();
+    if (!signer) {
+      toast({
+        title: "Wallet required",
+        description: "Connect your sovereign wallet to anchor this motion on the Governor.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setBusy(true);
     try {
+      // Fetch the full motion body so the on-chain description carries context.
+      const { data: motionRow } = await (supabase as any)
+        .from("dao_proposals")
+        .select("title, description")
+        .eq("id", proposal.id)
+        .maybeSingle();
+      const motionTitle = motionRow?.title || proposal.title || "(untitled motion)";
+      const motionBody = motionRow?.description || "(no body)";
+      const saltedDescription = `# ${motionTitle}\n\n${motionBody}\n\n---\n*System Ref: ${proposal.id}*`;
+
+      console.log("[MOTION_THREAD][ESCALATE][CHAIN_START] Requesting wallet signature for Governor.propose()…");
+      let chainResult: { hash: string; proposalId?: string };
+      try {
+        chainResult = await governanceService.propose(saltedDescription);
+      } catch (chainErr: any) {
+        const code = chainErr?.code;
+        let friendly = chainErr?.shortMessage || chainErr?.message || "Unknown chain error.";
+        if (code === "ACTION_REJECTED" || code === 4001 || /user rejected/i.test(friendly)) {
+          friendly = "Signature declined — motion not escalated.";
+        } else if (code === "INSUFFICIENT_FUNDS" || /insufficient funds/i.test(friendly)) {
+          friendly = "Not enough gas to anchor this motion on-chain.";
+        } else if (/GovernorUnexpectedProposalState|already exists|duplicate/i.test(friendly)) {
+          friendly = "An identical proposal is already on-chain.";
+        }
+        throw new Error(friendly);
+      }
+
+      const txHash = chainResult.hash;
+      const onChainId = chainResult.proposalId || "";
+      if (!txHash || !onChainId) {
+        throw new Error("Governor did not confirm the proposal id. Please retry.");
+      }
+
+      let onChainBlock: number | null = null;
+      try {
+        const provider = signer.provider;
+        if (provider) {
+          const receipt = await provider.getTransactionReceipt(txHash);
+          onChainBlock = receipt?.blockNumber ?? null;
+        }
+      } catch {
+        // Block fetch is best-effort — the server still records the id.
+      }
+
       const { hash, payload } = await generateACAHash(userId, `motion_escalate_${proposal.id}`, [
         "MOTION_ESCALATE", "LEDGER_WRITE",
       ]);
       const { data, error } = await supabase.functions.invoke("gov-escalate-motion", {
-        body: { proposal_id: proposal.id, aca_hash: hash, aca_payload: payload },
+        body: {
+          proposal_id: proposal.id,
+          aca_hash: hash,
+          aca_payload: payload,
+          on_chain_id: onChainId,
+          tx_hash: txHash,
+          on_chain_block: onChainBlock,
+        },
       });
       if (error) throw error;
       if ((data as any)?.error) throw new Error((data as any).error);
-      
-      toast({ title: "Motion escalated to DAO floor" });
+
+      toast({ title: "Motion escalated · live on Governor" });
       onChanged?.();
       onClose();
       console.log("[MOTION_THREAD][ESCALATE][END:OK] Payload escalated successfully.");

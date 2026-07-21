@@ -60,9 +60,19 @@ Deno.serve(async (req) => {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-    const { proposal_id, aca_hash, aca_payload } = body || {};
+    const { proposal_id, aca_hash, aca_payload, on_chain_id, tx_hash, on_chain_block } = body || {};
     if (typeof proposal_id !== "string" || typeof aca_hash !== "string" || !aca_payload) {
       return new Response(JSON.stringify({ error: "Missing: proposal_id, aca_hash, aca_payload" }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    if (typeof on_chain_id !== "string" || on_chain_id.length === 0) {
+      return new Response(JSON.stringify({ error: "Missing on_chain_id — client must anchor on Governor before escalate" }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    if (typeof tx_hash !== "string" || !/^0x[a-f0-9]{64}$/i.test(tx_hash)) {
+      return new Response(JSON.stringify({ error: "Invalid tx_hash" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -107,8 +117,11 @@ Deno.serve(async (req) => {
     const { error: updErr } = await admin
       .from("dao_proposals")
       .update({
-        lifecycle_phase: "active_vote",
+        lifecycle_phase: "active",
         status: "active",
+        on_chain_id,
+        tx_hash,
+        on_chain_block: typeof on_chain_block === "number" ? on_chain_block : null,
         escalated_at: nowIso,
         escalated_by: callerId,
         end_date: endIso,

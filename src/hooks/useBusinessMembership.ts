@@ -4,6 +4,16 @@ import { supabase } from "@/integrations/supabase/client";
 export type PlatformRole = "Org Admin" | "Team Lead" | "Team Member" | string;
 export type EntityType = "C-Corp" | "S-Corp" | "LLC" | "Sole" | "Non-Profit";
 
+const ORG_ADMIN_VALUES = new Set(["Org Admin", "org_admin", "org admin", "admin"]);
+
+const normalizePlatformRole = (role?: string | null): PlatformRole => {
+  if (!role) return "Team Member";
+  if (ORG_ADMIN_VALUES.has(role)) return "Org Admin";
+  if (role === "team_lead") return "Team Lead";
+  if (role === "team_member") return "Team Member";
+  return role;
+};
+
 export interface Membership {
   employeeId: string;
   businessId: string;
@@ -77,10 +87,9 @@ export const useBusinessMembership = () => {
         return;
       }
 
-      // FIX: Corrected PostgREST syntax to 'businesses ( name )' to prevent PGRST200 schema caching errors
       const { data: empRows, error: empErr } = await supabase
         .from("employees")
-        .select("id, business_id, platform_role, status, businesses ( name )")
+        .select("id, business_id, platform_role, status")
         .eq("user_id", user.id)
         .eq("status", "active");
 
@@ -89,11 +98,29 @@ export const useBusinessMembership = () => {
         console.warn("[BUSINESS_MEMBERSHIP] employees table schema gracefully bypassed:", empErr.message);
       }
 
+      const businessIds = Array.from(new Set((empRows || []).map((row: any) => row.business_id).filter(Boolean)));
+
+      let businessNames: Record<string, string> = {};
+      if (businessIds.length > 0) {
+        const { data: businessRows, error: businessErr } = await supabase
+          .from("businesses")
+          .select("id, name")
+          .in("id", businessIds);
+
+        if (businessErr) {
+          console.warn("[BUSINESS_MEMBERSHIP] businesses table schema gracefully bypassed:", businessErr.message);
+        }
+
+        businessNames = Object.fromEntries(
+          (businessRows || []).map((business: any) => [business.id, business.name || "Unnamed Business"]),
+        );
+      }
+
       const baseMemberships: Membership[] = (empRows || []).map((row: any) => ({
         employeeId: row.id,
         businessId: row.business_id,
-        businessName: row.businesses?.name || "Unnamed Business",
-        platformRole: row.platform_role || "Team Member",
+        businessName: businessNames[row.business_id] || "Unnamed Business",
+        platformRole: normalizePlatformRole(row.platform_role),
         isLastOrgAdmin: false,
       }));
 
@@ -104,7 +131,7 @@ export const useBusinessMembership = () => {
             .from("employees")
             .select("id", { count: "exact", head: true })
             .eq("business_id", m.businessId)
-            .eq("platform_role", "Org Admin")
+            .in("platform_role", Array.from(ORG_ADMIN_VALUES))
             .eq("status", "active")
             .neq("id", m.employeeId);
             

@@ -60,7 +60,6 @@ const DEPLOYMENTS: Record<DeploymentEnv, ProtocolAddresses> = {
     },
     usdc: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
   },
-
   // ── Base Sepolia (Chain ID 84532) — Internal Testing ──────────
   testnet: {
     safe: "0x0910EF34C9F59A90d90FF505B1036DEed4a25d59",
@@ -103,7 +102,6 @@ if ((ACTIVE_DEPLOYMENT as DeploymentEnv) !== "mainnet") {
 // ─────────────────────────────────────────────────────────────────────
 
 // ── Minimal ABIs (only the functions the app needs to call) ─────────
-
 // IDIA Token is a standard ERC20Votes governance token on Base Mainnet.
 // All methods below — including `transfer`, `approve`, `delegate`,
 // `delegates`, and `getVotes` — are live on-chain. Do NOT strip them on
@@ -176,18 +174,17 @@ export const GOVERNOR_ABI = [
   "error QueueEmpty()",
   "error QueueFull()",
   // V3 adjustable quorum
-"function quorumThreshold() view returns (uint256)",
-"function quorumFloor() view returns (uint256)",
-"function quorumCeiling() view returns (uint256)",
-"function getQuorumParams() view returns (uint256 currentQuorum, uint256 floor, uint256 ceiling, address safeAddress)",
-"function updateQuorum(uint256 newQuorum)",
-"function emergencyUpdateQuorum(uint256 newQuorum)",
-"error NotExecutor()",
-"error NotSafe()",
-"error BelowFloor(uint256 proposed, uint256 floor)",
-"error AboveCeiling(uint256 proposed, uint256 ceiling)",
+  "function quorumThreshold() view returns (uint256)",
+  "function quorumFloor() view returns (uint256)",
+  "function quorumCeiling() view returns (uint256)",
+  "function getQuorumParams() view returns (uint256 currentQuorum, uint256 floor, uint256 ceiling, address safeAddress)",
+  "function updateQuorum(uint256 newQuorum)",
+  "function emergencyUpdateQuorum(uint256 newQuorum)",
+  "error NotExecutor()",
+  "error NotSafe()",
+  "error BelowFloor(uint256 proposed, uint256 floor)",
+  "error AboveCeiling(uint256 proposed, uint256 ceiling)",
 ];
-
 
 export const REGISTRY_ABI = [
   "function getPoolByLocation(string location) view returns (address)",

@@ -424,7 +424,7 @@ const PureAlphaDashboard = ({ isMasked = false }: PureAlphaDashboardProps) => {
         document.body
       )}
 
-      <div className={`p-4 pb-24 space-y-4 animate-fade-in bg-white min-h-screen font-sans ${isMasked ? "blur-md pointer-events-none" : ""}`}>
+      <div className={`p-4 pb-24 space-y-4 animate-fade-in bg-background min-h-screen font-sans ${isMasked ? "blur-md pointer-events-none" : ""}`}>
         
         {/* Sovereign Header */}
         <div className="flex items-center justify-between mb-2">
@@ -457,31 +457,31 @@ const PureAlphaDashboard = ({ isMasked = false }: PureAlphaDashboardProps) => {
             <div className="flex items-center gap-2 mb-2 overflow-x-auto no-scrollbar pb-2">
               <Badge 
                 onClick={() => setPureAlphaView('fusion')}
-                className={`text-[10px] uppercase font-bold cursor-pointer whitespace-nowrap px-3 py-1 ${pureAlphaView === 'fusion' ? 'bg-slate-900 text-white hover:bg-slate-800' : 'bg-white text-slate-500 hover:bg-slate-50 border border-slate-200'}`}
+                className={`text-[10px] uppercase font-bold cursor-pointer whitespace-nowrap px-3 py-1 ${pureAlphaView === 'fusion' ? 'bg-primary text-primary-foreground hover:bg-primary/90' : 'bg-card text-muted-foreground hover:bg-muted border border-border'}`}
               >
                 P&L Fusion
               </Badge>
               <Badge 
                 onClick={() => setPureAlphaView('balance')}
-                className={`text-[10px] uppercase font-bold cursor-pointer whitespace-nowrap px-3 py-1 ${pureAlphaView === 'balance' ? 'bg-slate-900 text-white hover:bg-slate-800' : 'bg-white text-slate-500 hover:bg-slate-50 border border-slate-200'}`}
+                className={`text-[10px] uppercase font-bold cursor-pointer whitespace-nowrap px-3 py-1 ${pureAlphaView === 'balance' ? 'bg-primary text-primary-foreground hover:bg-primary/90' : 'bg-card text-muted-foreground hover:bg-muted border border-border'}`}
               >
                 Balance Sheet
               </Badge>
               <Badge 
                 onClick={() => setPureAlphaView('cash')}
-                className={`text-[10px] uppercase font-bold cursor-pointer whitespace-nowrap px-3 py-1 ${pureAlphaView === 'cash' ? 'bg-slate-900 text-white hover:bg-slate-800' : 'bg-white text-slate-500 hover:bg-slate-50 border border-slate-200'}`}
+                className={`text-[10px] uppercase font-bold cursor-pointer whitespace-nowrap px-3 py-1 ${pureAlphaView === 'cash' ? 'bg-primary text-primary-foreground hover:bg-primary/90' : 'bg-card text-muted-foreground hover:bg-muted border border-border'}`}
               >
                 Cash Flow
               </Badge>
               <Badge 
                 onClick={() => setPureAlphaView('ghost')}
-                className={`text-[10px] uppercase font-bold cursor-pointer whitespace-nowrap px-3 py-1 ${pureAlphaView === 'ghost' ? 'bg-slate-900 text-white hover:bg-slate-800' : 'bg-white text-slate-500 hover:bg-slate-50 border border-slate-200'}`}
+                className={`text-[10px] uppercase font-bold cursor-pointer whitespace-nowrap px-3 py-1 ${pureAlphaView === 'ghost' ? 'bg-primary text-primary-foreground hover:bg-primary/90' : 'bg-card text-muted-foreground hover:bg-muted border border-border'}`}
               >
                 Ghost Protocol
               </Badge>
               <Badge 
                 onClick={() => setPureAlphaView('acoustics')}
-                className={`text-[10px] uppercase font-bold cursor-pointer whitespace-nowrap px-3 py-1 ${pureAlphaView === 'acoustics' ? 'bg-slate-900 text-white hover:bg-slate-800' : 'bg-white text-slate-500 hover:bg-slate-50 border border-slate-200'}`}
+                className={`text-[10px] uppercase font-bold cursor-pointer whitespace-nowrap px-3 py-1 ${pureAlphaView === 'acoustics' ? 'bg-primary text-primary-foreground hover:bg-primary/90' : 'bg-card text-muted-foreground hover:bg-muted border border-border'}`}
               >
                 Acoustics
               </Badge>
@@ -601,7 +601,7 @@ const PureAlphaDashboard = ({ isMasked = false }: PureAlphaDashboardProps) => {
                     {ghostLogs.length > 0 ? (
                       <ul className="divide-y divide-slate-50">
                         {ghostLogs.map(log => (
-                          <li key={log.id} className="p-4 flex justify-between items-center bg-white">
+                          <li key={log.id} className="p-4 flex justify-between items-center bg-card">
                             <div>
                               <p className={`text-[10px] font-bold uppercase ${log.severity === 'critical' ? 'text-rose-600' : 'text-slate-900'}`}>{log.event_type}</p>
                               <p className="text-[9px] text-slate-500 mt-0.5">{log.description}</p>
@@ -611,7 +611,7 @@ const PureAlphaDashboard = ({ isMasked = false }: PureAlphaDashboardProps) => {
                         ))}
                       </ul>
                     ) : (
-                      <div className="p-8 text-center bg-white">
+                      <div className="p-8 text-center bg-card">
                         <ShieldCheck className="w-6 h-6 text-slate-200 mx-auto mb-2" />
                         <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Zero Intrusions</p>
                         <p className="text-[9px] text-slate-400 font-medium mt-1">No ghost protocol events detected.</p>
@@ -670,7 +670,7 @@ const PureAlphaDashboard = ({ isMasked = false }: PureAlphaDashboardProps) => {
                     {acousticLogs.length > 0 ? (
                       <ul className="divide-y divide-slate-50">
                         {acousticLogs.map(log => (
-                          <li key={log.id} className="p-4 flex justify-between items-center bg-white">
+                          <li key={log.id} className="p-4 flex justify-between items-center bg-card">
                             <div>
                               <p className={`text-[10px] font-bold uppercase ${log.severity === 'critical' ? 'text-rose-600' : 'text-slate-900'}`}>{log.event_type}</p>
                               <p className="text-[9px] text-slate-500 mt-0.5">{log.description}</p>
@@ -680,7 +680,7 @@ const PureAlphaDashboard = ({ isMasked = false }: PureAlphaDashboardProps) => {
                         ))}
                       </ul>
                     ) : (
-                      <div className="p-8 text-center bg-white">
+                      <div className="p-8 text-center bg-card">
                         <ShieldCheck className="w-6 h-6 text-slate-200 mx-auto mb-2" />
                         <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Environment Secure</p>
                         <p className="text-[9px] text-slate-400 font-medium mt-1">No acoustic coercion events logged.</p>
@@ -760,14 +760,14 @@ const PureAlphaDashboard = ({ isMasked = false }: PureAlphaDashboardProps) => {
 
           {/* 3. GAMMA TRIGGER TAB */}
           <TabsContent value="gamma" className="space-y-6 focus-visible:outline-none">
-            <div className="rounded-3xl border border-slate-50 bg-slate-50/30 p-10 text-center shadow-sm">
+            <div className="rounded-3xl border-border bg-muted/30 p-10 text-center shadow-sm">
                <div className={`w-24 h-24 rounded-full mx-auto mb-8 flex items-center justify-center border-4 transition-all duration-700 ${gammaActive ? 'border-orange-500 bg-orange-50 scale-110 shadow-[0_0_40px_rgba(249,115,22,0.15)]' : 'border-white bg-white'}`}>
                   <Zap className={`w-10 h-10 ${gammaActive ? 'text-orange-500 animate-pulse' : 'text-slate-200'}`} />
                </div>
                <h3 className="text-[11px] font-black text-slate-900 uppercase tracking-[0.2em] mb-4 font-sans">40Hz Entrainment Trigger</h3>
                <p className="text-[11px] text-slate-400 max-w-[200px] mx-auto mb-10 font-medium leading-relaxed font-sans">Active stimulation for pupillary response testing and neural drive peaking.</p>
                
-               <div className="flex items-center justify-between bg-white border border-slate-100 p-5 rounded-2xl shadow-sm">
+               <div className="flex items-center justify-between bg-card border-border p-5 rounded-2xl shadow-sm">
                   <div className="text-left font-sans">
                      <p className="text-[10px] font-black text-slate-900 uppercase">Hardware Pulse</p>
                      <p className="text-[9px] text-teal-600 font-bold uppercase tracking-tighter">{gammaActive ? "Transmitting" : "Standby"}</p>
@@ -779,7 +779,7 @@ const PureAlphaDashboard = ({ isMasked = false }: PureAlphaDashboardProps) => {
 
           {/* 4. MEMORY ANCHORING TAB */}
           <TabsContent value="memory" className="space-y-6 focus-visible:outline-none">
-             <div className="rounded-3xl border border-slate-100 bg-white shadow-sm overflow-hidden min-h-[460px] flex flex-col font-sans">
+             <div className="rounded-3xl border-border bg-card shadow-sm overflow-hidden min-h-[460px] flex flex-col font-sans">
                 <div className="p-5 border-b border-slate-50 flex items-center justify-between">
                    <div className="flex items-center gap-2">
                       <Target className="w-4 h-4 text-orange-500" />

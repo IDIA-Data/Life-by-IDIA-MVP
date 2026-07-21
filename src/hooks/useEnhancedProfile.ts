@@ -68,6 +68,7 @@ export const useEnhancedProfile = () => {
   useEffect(() => {
     loadProfileData();
     loadAvailableInterests();
+    loadUserInterests();
   }, []);
 
   const loadProfileData = async () => {
@@ -143,12 +144,26 @@ export const useEnhancedProfile = () => {
   };
 
   const loadAvailableInterests = async () => {
-    setAvailableInterests([
-      { id: "1", name: "Health & Fitness", category: "lifestyle" },
-      { id: "2", name: "Technology", category: "professional" },
-      { id: "3", name: "Finance", category: "professional" },
-      { id: "4", name: "Travel", category: "lifestyle" },
-    ]);
+    const { data, error } = await supabase
+      .from("interests")
+      .select("id, name, category")
+      .order("name");
+    if (!error && data) setAvailableInterests(data as UserInterests[]);
+  };
+
+  const loadUserInterests = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    const { data, error } = await (supabase.from("user_interests") as any)
+      .select("interest_id, interests(id, name, category)")
+      .eq("user_id", user.id);
+    if (!error && data) {
+      setInterests(
+        (data as any[])
+          .map((r) => r.interests)
+          .filter(Boolean) as UserInterests[],
+      );
+    }
   };
 
   const updateProfile = async (updates: Partial<EnhancedProfile>) => {
@@ -213,13 +228,26 @@ export const useEnhancedProfile = () => {
   const updateInterests = async (selectedInterestIds: string[]) => {
     setUpdating(true);
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("No user");
+
+      // Replace user's interests
+      const { error: delErr } = await (supabase.from("user_interests") as any)
+        .delete()
+        .eq("user_id", user.id);
+      if (delErr) throw delErr;
+
+      if (selectedInterestIds.length > 0) {
+        const rows = selectedInterestIds.map((interest_id) => ({ user_id: user.id, interest_id }));
+        const { error: insErr } = await (supabase.from("user_interests") as any).insert(rows);
+        if (insErr) throw insErr;
+      }
+
       setInterests(availableInterests.filter((interest) => selectedInterestIds.includes(interest.id)));
-      toast({
-        title: "Success",
-        description: "Interests updated successfully",
-      });
-    } catch (error) {
+      toast({ title: "Success", description: "Interests updated successfully" });
+    } catch (error: any) {
       console.error("Error updating interests:", error);
+      toast({ title: "Error", description: error?.message || "Failed to update interests", variant: "destructive" });
     } finally {
       setUpdating(false);
     }

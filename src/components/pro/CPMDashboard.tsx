@@ -30,7 +30,7 @@ const InfoIcon = ({ text }: { text: string }) => (
       <TooltipTrigger asChild>
         <Info className="w-2.5 h-2.5 ml-1 opacity-20 hover:opacity-100 transition-opacity cursor-help" />
       </TooltipTrigger>
-      <TooltipContent className="bg-white text-slate-900 border-slate-200 text-[10px] max-w-[180px] p-2 shadow-2xl font-sans">
+      <TooltipContent className="bg-popover text-popover-foreground border-border text-[10px] max-w-[180px] p-2 shadow-2xl font-sans">
         <p>{text}</p>
       </TooltipContent>
     </Tooltip>
@@ -212,7 +212,7 @@ const CPMDashboard = ({ isMasked = false }: { isMasked?: boolean }) => {
       )}
 
       <div 
-        className={`p-4 pb-24 space-y-6 animate-fade-in relative bg-white min-h-screen font-sans transition-transform duration-75 ease-out ${isMasked ? "blur-md pointer-events-none" : ""}`}
+        className={`p-4 pb-24 space-y-6 animate-fade-in relative bg-background min-h-screen font-sans transition-transform duration-75 ease-out ${isMasked ? "blur-md pointer-events-none" : ""}`}
         style={{
           perspective: '1200px',
           transform: `rotateX(calc(var(--pitch, 0) * ${gammaActive ? '35deg' : '12deg'})) rotateY(calc(var(--roll, 0) * ${gammaActive ? '-35deg' : '-12deg'}))`,
@@ -271,7 +271,7 @@ const CPMDashboard = ({ isMasked = false }: { isMasked?: boolean }) => {
                   <Zap className={`w-12 h-12 ${gammaActive ? 'text-orange-500 animate-pulse' : 'text-slate-200'}`} />
                </div>
                <h3 className="text-[11px] font-black text-slate-900 uppercase tracking-[0.2em] mb-4 font-sans text-center">40Hz Entrainment Trigger</h3>
-               <div className="flex items-center justify-between bg-white border border-slate-100 p-5 rounded-2xl shadow-md" style={{ transform: 'translateZ(20px)' }}>
+               <div className="flex items-center justify-between bg-card border-border p-5 rounded-2xl shadow-md" style={{ transform: 'translateZ(20px)' }}>
                   <div className="text-left font-sans">
                      <p className="text-[10px] font-black text-slate-900 uppercase">Hardware Pulse</p>
                      <p className="text-[9px] text-teal-600 font-bold uppercase tracking-tighter">{gammaActive ? "Transmitting" : "Standby"}</p>
@@ -282,7 +282,7 @@ const CPMDashboard = ({ isMasked = false }: { isMasked?: boolean }) => {
           </TabsContent>
 
           <TabsContent value="memory" className="space-y-6 focus-visible:outline-none">
-             <div className="rounded-3xl border border-slate-100 bg-white shadow-sm overflow-hidden min-h-[480px] flex flex-col font-sans" style={{ transform: 'translateZ(35px)' }}>
+             <div className="rounded-3xl border-border bg-card shadow-sm overflow-hidden min-h-[480px] flex flex-col font-sans" style={{ transform: 'translateZ(35px)' }}>
                 <div className="p-5 border-b border-slate-50 flex items-center justify-between">
                    <div className="flex items-center gap-2">
                       <Target className="w-4 h-4 text-orange-500" />

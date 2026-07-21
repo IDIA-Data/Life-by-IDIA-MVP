@@ -4,7 +4,7 @@ import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Smartphone, Mail, Moon, BellRing, ShieldAlert, Plus, Trash2, Check } from 'lucide-react';
+import { Smartphone, Moon, BellRing, Plus, Trash2, Check } from 'lucide-react';
 import { useProfile } from '@/hooks/useProfile';
 import { useToast } from '@/hooks/use-toast';
 import { useFocusModes } from '@/hooks/useFocusModes';
@@ -17,6 +17,8 @@ export function NotificationSettings() {
   const { preferences, updatePreferences } = useProfile();
   const { toast } = useToast();
   const payReady = isPayReady();
+
+  
 
   const { modes, create: createFocus, activate: activateFocus, deactivateAll, remove: removeFocus } = useFocusModes();
   const { enable: enablePush, disable: disablePush } = usePushNotifications();
@@ -33,14 +35,29 @@ export function NotificationSettings() {
     }
   };
 
+  const [pushPending, setPushPending] = useState(false);
   const handlePushToggle = async (v: boolean) => {
-    if (v) {
-      const ok = await enablePush();
-      if (!ok) return; // permission denied — leave preference off
-      await handlePreferenceUpdate('push_notifications', true);
-    } else {
-      await disablePush();
-      await handlePreferenceUpdate('push_notifications', false);
+    if (pushPending) return;
+    setPushPending(true);
+    try {
+      if (v) {
+        const result = await enablePush();
+        if (!result.ok) {
+          toast({
+            title: 'Push not enabled',
+            description: result.reason || 'Permission denied',
+            variant: 'destructive',
+          });
+          return;
+        }
+        await handlePreferenceUpdate('push_notifications', true);
+        toast({ title: 'Push enabled', description: `Registered on ${result.platform}` });
+      } else {
+        await disablePush();
+        await handlePreferenceUpdate('push_notifications', false);
+      }
+    } finally {
+      setPushPending(false);
     }
   };
 
@@ -110,6 +127,7 @@ export function NotificationSettings() {
             id="push-notifications"
             checked={preferences?.push_notifications || false}
             onCheckedChange={handlePushToggle}
+            disabled={pushPending}
           />
         </div>
 
@@ -238,53 +256,6 @@ export function NotificationSettings() {
               </Button>
             </div>
           </div>
-        )}
-      </section>
-
-      {/* 4. Email Comms */}
-      <section className="space-y-4 pt-4 border-t">
-        <div className="flex items-center gap-2">
-          <Mail className="w-4 h-4 text-muted-foreground" />
-          <h3 className="text-sm font-semibold">Email Comms</h3>
-        </div>
-
-        <div className="flex items-center justify-between gap-3 bg-muted/30 p-2.5 rounded-lg border border-border/50">
-          <div className="flex items-center gap-3 min-w-0 opacity-80">
-            <ShieldAlert className="w-4 h-4 text-destructive" />
-            <div className="space-y-0.5">
-              <Label className="text-sm font-medium">Security Alerts</Label>
-              <p className="text-[10px] text-muted-foreground">New logins and password changes</p>
-            </div>
-          </div>
-          <Switch checked={true} disabled />
-        </div>
-
-        {payReady && (
-          <>
-            <div className="flex items-center justify-between gap-3 pl-1">
-              <div className="space-y-0.5 min-w-0">
-                <Label htmlFor="email-marketing" className="text-sm font-medium">Product Updates</Label>
-                <p className="text-xs text-muted-foreground">Feature drops and announcements</p>
-              </div>
-              <Switch
-                id="email-marketing"
-                checked={preferences?.marketing_emails || false}
-                onCheckedChange={(v) => handlePreferenceUpdate('marketing_emails', v)}
-              />
-            </div>
-
-            <div className="flex items-center justify-between gap-3 pl-1">
-              <div className="space-y-0.5 min-w-0">
-                <Label htmlFor="email-reports" className="text-sm font-medium">Monthly Reports</Label>
-                <p className="text-xs text-muted-foreground">Data summaries and health metrics</p>
-              </div>
-              <Switch
-                id="email-reports"
-                checked={preferences?.email_reports !== false}
-                onCheckedChange={(v) => handlePreferenceUpdate('email_reports', v)}
-              />
-            </div>
-          </>
         )}
       </section>
 

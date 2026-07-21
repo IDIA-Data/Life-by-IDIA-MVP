@@ -21,37 +21,62 @@ interface NotifyOptions {
 
 // In-memory cache of the current user's notification preferences. Refreshed
 // whenever the user's preference row changes via realtime.
-let prefsCache: { in_app_alerts: boolean; in_app_sounds: boolean } = {
+let prefsCache: {
+  in_app_alerts: boolean;
+  in_app_sounds: boolean;
+  quiet_hours_enabled: boolean;
+  quiet_hours_start: string;
+  quiet_hours_end: string;
+} = {
   in_app_alerts: true,
   in_app_sounds: true,
+  quiet_hours_enabled: false,
+  quiet_hours_start: "22:00",
+  quiet_hours_end: "08:00",
 };
+
+function applyPrefs(row: any) {
+  prefsCache = {
+    in_app_alerts: row.in_app_alerts !== false,
+    in_app_sounds: row.in_app_sounds !== false,
+    quiet_hours_enabled: row.quiet_hours_enabled === true,
+    quiet_hours_start: row.quiet_hours_start || "22:00",
+    quiet_hours_end: row.quiet_hours_end || "08:00",
+  };
+}
+
+function toMinutes(hhmm: string): number {
+  const [h, m] = hhmm.split(":").map((n) => parseInt(n, 10));
+  return (isNaN(h) ? 0 : h) * 60 + (isNaN(m) ? 0 : m);
+}
+
+export function isInQuietHours(now: Date = new Date()): boolean {
+  if (!prefsCache.quiet_hours_enabled) return false;
+  const cur = now.getHours() * 60 + now.getMinutes();
+  const start = toMinutes(prefsCache.quiet_hours_start);
+  const end = toMinutes(prefsCache.quiet_hours_end);
+  if (start === end) return false;
+  if (start < end) return cur >= start && cur < end;
+  // Wrap-around window (e.g. 22:00 → 08:00)
+  return cur >= start || cur < end;
+}
 
 async function hydratePrefs() {
   try {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
     const { data } = await (supabase.from("user_preferences") as any)
-      .select("in_app_alerts,in_app_sounds")
+      .select("in_app_alerts,in_app_sounds,quiet_hours_enabled,quiet_hours_start,quiet_hours_end")
       .eq("user_id", user.id)
       .maybeSingle();
-    if (data) {
-      prefsCache = {
-        in_app_alerts: data.in_app_alerts !== false,
-        in_app_sounds: data.in_app_sounds !== false,
-      };
-    }
+    if (data) applyPrefs(data);
     supabase
       .channel(`notify-prefs-${user.id}`)
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "user_preferences", filter: `user_id=eq.${user.id}` },
         (payload: any) => {
-          if (payload.new) {
-            prefsCache = {
-              in_app_alerts: payload.new.in_app_alerts !== false,
-              in_app_sounds: payload.new.in_app_sounds !== false,
-            };
-          }
+          if (payload.new) applyPrefs(payload.new);
         },
       )
       .subscribe();
@@ -62,9 +87,15 @@ async function hydratePrefs() {
 hydratePrefs();
 
 function fire(level: NotificationLevel, title: string, opts?: NotifyOptions) {
+  const quiet = isInQuietHours();
+
   if (prefsCache.in_app_alerts) {
     notificationStore.add(level, title, opts?.description);
   }
+
+  // Focus Mode: suppress transient toast + chime, but keep history above.
+  if (quiet) return;
+
   if (prefsCache.in_app_sounds) {
     playChime(level === "error" ? 440 : level === "warning" ? 660 : 880);
   }
