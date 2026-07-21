@@ -14,7 +14,7 @@ CREATE TABLE public.data_connections (
   updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now()
 );
 
--- Create user_wallets table to manage IDIA-USD balances
+-- Create user_wallets table to manage USDC balances
 CREATE TABLE public.user_wallets (
   id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
   user_id UUID REFERENCES auth.users NOT NULL UNIQUE,
@@ -125,7 +125,7 @@ CREATE POLICY "System can update staged data"
 CREATE OR REPLACE FUNCTION public.process_staged_data()
 RETURNS TRIGGER AS $$
 DECLARE
-  base_reward DECIMAL(10,2) := 0.50; -- Base reward in IDIA-USD
+  base_reward DECIMAL(10,2) := 0.50; -- Base reward in USDC
   quality_multiplier DECIMAL(3,2) := 1.0;
   uniqueness_bonus DECIMAL(10,2) := 0.0;
   final_reward DECIMAL(10,2);

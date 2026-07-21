@@ -19,6 +19,7 @@ interface Props {
     | "requesting_drip"
     | "awaiting_gas"
     | "approving_usdc"
+    | "approving_vault"
     | "delegating_self"
     | "done"
     | "failed";

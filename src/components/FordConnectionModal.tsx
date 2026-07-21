@@ -303,7 +303,7 @@ const FordConnectionModal = ({
                     <p className="font-medium text-blue-900 mb-1">Full Vehicle Telemetry</p>
                     <p className="text-sm text-blue-800">
                       Connect your Ford vehicle to stream real-time driving, location, EV, and diagnostic data — all
-                      anonymized and earning you IDIA-USD.
+                      anonymized and earning you USDC.
                     </p>
                   </div>
                 </div>

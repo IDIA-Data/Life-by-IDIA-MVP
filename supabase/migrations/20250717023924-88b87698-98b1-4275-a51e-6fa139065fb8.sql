@@ -159,7 +159,7 @@ LANGUAGE plpgsql
 SECURITY DEFINER
 AS $$
 DECLARE
-  base_reward DECIMAL(10,2) := 0.50; -- Base reward in IDIA-USD
+  base_reward DECIMAL(10,2) := 0.50; -- Base reward in USDC
   quality_multiplier DECIMAL(3,2) := 1.0;
   uniqueness_bonus DECIMAL(10,2) := 0.0;
   final_reward DECIMAL(10,2);

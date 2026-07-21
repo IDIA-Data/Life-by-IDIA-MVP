@@ -71,8 +71,22 @@ const TermsOfService = () => {
       if (authError) throw authError;
       console.log("[TOS_FLOW] Auth Metadata Updated.");
 
+      // Mirror ToS into consent_registry (best-effort, idempotent via unique index)
+      try {
+        await (supabase as any).from("consent_registry").insert({
+          user_id: user.id,
+          consent_type: "TOS_V1",
+          decision: "accepted",
+          document_version: "v1",
+          aca_hash_key: payload.aca_hash_key,
+          payload,
+        });
+      } catch (e) {
+        console.warn("[TOS_FLOW] consent_registry mirror skipped:", e);
+      }
+
       toast.success("Identity Ledger Updated: ToS Accepted");
-      navigate("/");
+      navigate("/authority-of-record");
     } catch (error: any) {
       console.error(`[TOS_FLOW] CRITICAL STALL: ${error.message}`);
       toast.error("Compliance capture failed. System entry denied.");
@@ -103,7 +117,7 @@ const TermsOfService = () => {
           className="flex-1 overflow-y-auto bg-muted/20"
         >
           <div className="flex flex-col items-center gap-4 py-4 px-3 bg-muted/20">
-            {Array.from({ length: 13 }, (_, i) => {
+            {Array.from({ length: 11 }, (_, i) => {
               const n = String(i + 1).padStart(2, "0");
               return (
                 <img
